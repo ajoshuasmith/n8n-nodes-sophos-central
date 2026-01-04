@@ -1,6 +1,6 @@
 {
 	"name": "@joshuanode/n8n-nodes-sophos-central",
-	"version": "0.1.0-beta.1",
+	"version": "0.1.0",
 	"description": "n8n community node for Sophos Central (Firewall Management API)",
 	"license": "MIT",
 	"keywords": [
@@ -42,8 +42,7 @@
 		"dev": "n8n-node dev",
 		"lint": "n8n-node lint",
 		"lint:fix": "n8n-node lint --fix",
-		"release": "n8n-node release",
-		"prepublishOnly": "n8n-node prerelease"
+		"release": "n8n-node release"
 	},
 	"n8n": {
 		"n8nNodesApiVersion": 1,
