@@ -3,7 +3,7 @@ import type { Icon, ICredentialTestRequest, ICredentialType, INodeProperties } f
 export class SophosCentralApi implements ICredentialType {
 	name = 'sophosCentralApi';
 	displayName = 'Sophos Central API';
-	icon: Icon = 'file:../nodes/SophosCentral/images/sophos-central.svg';
+	icon: Icon = 'file:sophos-central.svg';
 	documentationUrl = 'https://developer.sophos.com/getting-started';
 
 	properties: INodeProperties[] = [

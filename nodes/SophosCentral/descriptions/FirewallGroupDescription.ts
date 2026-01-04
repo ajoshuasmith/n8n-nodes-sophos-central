@@ -1,6 +1,6 @@
 import type { INodeProperties } from 'n8n-workflow';
 
-export const backupOperations: INodeProperties[] = [
+export const firewallGroupOperations: INodeProperties[] = [
 	{
 		displayName: 'Operation',
 		name: 'operation',
@@ -8,37 +8,43 @@ export const backupOperations: INodeProperties[] = [
 		noDataExpression: true,
 		displayOptions: {
 			show: {
-				resource: ['backup'],
+				resource: ['firewallGroup'],
 			},
 		},
 		options: [
 			{
-				name: 'Create (Not Supported)',
-				value: 'create',
-				description: 'Not supported by Sophos Central Firewall API v1',
-				action: 'Create a backup',
+				name: 'Get',
+				value: 'get',
+				description: 'Get a firewall group',
+				action: 'Get a firewall group',
 			},
 			{
 				name: 'Get Many',
 				value: 'getAll',
-				description: 'Not supported by Sophos Central Firewall API v1',
-				action: 'Get many backups',
+				description: 'Get many firewall groups',
+				action: 'Get many firewall groups',
+			},
+			{
+				name: 'Get Sync Status',
+				value: 'getSyncStatus',
+				description: 'Get sync status of firewalls in a group',
+				action: 'Get sync status',
 			},
 		],
-		default: 'create',
+		default: 'get',
 	},
 ];
 
-export const backupFields: INodeProperties[] = [
+export const firewallGroupFields: INodeProperties[] = [
 	{
 		displayName: 'Tenant',
 		name: 'tenantId',
 		type: 'resourceLocator',
 		default: { mode: 'list', value: '' },
-		description: 'Tenant to perform the operation on (required for Partner credentials)',
+		description: 'Tenant to perform the operation on',
 		displayOptions: {
 			show: {
-				resource: ['backup'],
+				resource: ['firewallGroup'],
 			},
 		},
 		modes: [
@@ -55,20 +61,22 @@ export const backupFields: INodeProperties[] = [
 				displayName: 'By ID',
 				name: 'id',
 				type: 'string',
-				placeholder: 'e.g. {{ $json.tenantId }}',
+				placeholder: 'e.g. a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+				hint: 'Use {{ $json.tenantId }} to reference from previous step',
 			},
 		],
 	},
 	{
-		displayName: 'Firewall',
-		name: 'firewallId',
+		displayName: 'Group',
+		name: 'firewallGroupId',
 		type: 'resourceLocator',
 		default: { mode: 'list', value: '' },
 		required: true,
-		description: 'Firewall to operate on',
+		description: 'Select the Firewall Group',
 		displayOptions: {
 			show: {
-				resource: ['backup'],
+				resource: ['firewallGroup'],
+				operation: ['get', 'getSyncStatus'],
 			},
 		},
 		modes: [
@@ -77,7 +85,7 @@ export const backupFields: INodeProperties[] = [
 				name: 'list',
 				type: 'list',
 				typeOptions: {
-					searchListMethod: 'firewallSearch',
+					searchListMethod: 'firewallGroupSearch',
 					searchable: true,
 				},
 			},
@@ -85,52 +93,39 @@ export const backupFields: INodeProperties[] = [
 				displayName: 'By ID',
 				name: 'id',
 				type: 'string',
-				placeholder: 'e.g. {{ $json.firewallId }}',
+				placeholder: 'e.g. 12345678-1234-1234-1234-123456789abc',
 			},
 		],
-	},
-	{
-		displayName: 'Description',
-		name: 'description',
-		type: 'string',
-		default: '=Backup - {{ $now.toFormat("yyyy-MM-dd HH:mm") }}',
-		displayOptions: {
-			show: {
-				resource: ['backup'],
-				operation: ['create'],
-			},
-		},
-		description: 'Unused (operation not supported)',
 	},
 	{
 		displayName: 'Return All',
 		name: 'returnAll',
 		type: 'boolean',
-		default: false,
 		displayOptions: {
 			show: {
-				resource: ['backup'],
+				resource: ['firewallGroup'],
 				operation: ['getAll'],
 			},
 		},
+		default: false,
 		description: 'Whether to return all results or only up to a given limit',
 	},
 	{
 		displayName: 'Limit',
 		name: 'limit',
 		type: 'number',
-		default: 50,
-		typeOptions: {
-			minValue: 1,
-			maxValue: 1000,
-		},
 		displayOptions: {
 			show: {
-				resource: ['backup'],
+				resource: ['firewallGroup'],
 				operation: ['getAll'],
 				returnAll: [false],
 			},
 		},
+		typeOptions: {
+			minValue: 1,
+			maxValue: 1000,
+		},
+		default: 50,
 		description: 'Max number of results to return',
 	},
 ];

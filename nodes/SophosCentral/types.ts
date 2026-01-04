@@ -17,9 +17,12 @@ export interface IAuthToken {
 export interface ITenant {
 	id: string;
 	name: string;
+	showAs?: string;
+	dataGeography?: string;
 	dataRegion: string;
 	apiHost: string;
 	status: string;
+	billingType?: string;
 }
 
 export interface IFirewall {

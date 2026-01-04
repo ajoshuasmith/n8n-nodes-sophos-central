@@ -13,6 +13,7 @@ import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 import type { IAuthToken, ISophosCentralCredentials, ITenant } from './types';
 
 const tokenCache = new Map<string, IAuthToken>();
+const tenantApiHostCache = new Map<string, string>();
 
 function getCacheKey(credentials: ISophosCentralCredentials): string {
 	return `${credentials.clientId}:${credentials.clientSecret}`;
@@ -165,6 +166,18 @@ export async function getTenantList(
 
 		const items = (response as IDataObject).items as ITenant[] | undefined;
 		if (items?.length) {
+			for (const tenant of items) {
+				// Cache the apiHost for each tenant
+				// Check for various casing formats to ensure we catch the field
+				const host =
+					tenant.apiHost ||
+					(tenant as unknown as IDataObject)['api-host'] ||
+					(tenant as unknown as IDataObject).api_host;
+
+				if (tenant.id && host) {
+					tenantApiHostCache.set(tenant.id, host as string);
+				}
+			}
 			returnData.push(...items);
 		}
 
@@ -198,6 +211,42 @@ export async function resolveTenantId(
 	);
 }
 
+export async function getTenantApiHost(
+	this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions,
+	tenantId: string,
+): Promise<string> {
+	// Check cache first
+	const cached = tenantApiHostCache.get(tenantId);
+	if (cached) {
+		return cached;
+	}
+
+	// For Partner accounts, fetch tenant list to populate cache
+	const credentials = (await this.getCredentials(
+		'sophosCentralApi',
+	)) as unknown as ISophosCentralCredentials;
+
+	if (credentials.accountType === 'partner') {
+		// Fetch tenants to populate the cache
+		await getTenantList.call(this, credentials);
+		const found = tenantApiHostCache.get(tenantId);
+		if (found) {
+			return found;
+		}
+
+		// If after fetching the list we still don't have the tenant, we shouldn't guess.
+		// Defaulting to the partner region often fails with obscure errors.
+		throw new NodeOperationError(
+			this.getNode(),
+			`Could not find API host for tenant ID '${tenantId}'. Ensure the tenant exists and is accessible by this Partner account.`,
+		);
+	}
+
+	// Fallback to Partner's/Organization's data region ensures backward compatibility for Org accounts
+	const ctx = await getAuthContext.call(this, credentials);
+	return ctx.dataRegion;
+}
+
 export async function sophosCentralApiRequest(
 	this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions,
 	method: IHttpRequestMethods,
@@ -222,7 +271,9 @@ export async function sophosCentralApiRequest(
 		);
 	}
 
-	const url = joinUrl(ctx.dataRegion, endpoint);
+	// Get the API host specific to this tenant (critical for multi-region support)
+	const apiHost = await getTenantApiHost.call(this, effectiveTenantId);
+	const url = joinUrl(apiHost, endpoint);
 
 	const options: IHttpRequestOptions = {
 		method,
@@ -247,12 +298,19 @@ export async function sophosCentralApiRequest(
 		const errorResponse = (error || {}) as JsonObject;
 		const err = error as {
 			statusCode?: number;
-			response?: { headers?: IDataObject };
+			response?: { headers?: IDataObject; status?: number; statusCode?: number };
 			error?: { message?: string; error_description?: string };
 			message?: string;
 		};
 
-		if (err.statusCode === 401) {
+		// Try to capture the status code from various possible locations in the error object
+		const statusCode = err.statusCode || err.response?.status || err.response?.statusCode;
+
+		// Critical Debugging Info: Include the URL we tried to hit in the error message
+		// This helps verify if we hit the correct region (e.g., api-us01 vs api-eu01)
+		const debugInfo = `(URL: ${url}, Tenant: ${effectiveTenantId}, Host: ${apiHost})`;
+
+		if (statusCode === 401) {
 			tokenCache.delete(getCacheKey(credentials));
 			throw new NodeApiError(this.getNode(), errorResponse, {
 				message: 'Authentication failed',
@@ -261,21 +319,21 @@ export async function sophosCentralApiRequest(
 			});
 		}
 
-		if (err.statusCode === 403) {
+		if (statusCode === 403) {
 			throw new NodeApiError(this.getNode(), errorResponse, {
 				message: 'Permission denied',
 				description: 'Your API credentials do not have permission to perform this action.',
 			});
 		}
 
-		if (err.statusCode === 404) {
+		if (statusCode === 404) {
 			throw new NodeApiError(this.getNode(), errorResponse, {
-				message: 'Resource not found',
-				description: err.error?.message || 'The requested resource does not exist.',
+				message: `Resource not found ${debugInfo}`,
+				description: err.error?.message || 'The requested resource does not exist. Check if the ID is correct and belongs to this tenant.',
 			});
 		}
 
-		if (err.statusCode === 429) {
+		if (statusCode === 429) {
 			const retryAfter = err.response?.headers?.['retry-after'] || 60;
 			throw new NodeApiError(this.getNode(), errorResponse, {
 				message: 'Rate limit exceeded',
@@ -287,7 +345,7 @@ export async function sophosCentralApiRequest(
 			err.error?.message || err.error?.error_description || err.message || 'Unknown error';
 
 		throw new NodeApiError(this.getNode(), errorResponse, {
-			message: 'Sophos Central API Error',
+			message: `Sophos Central API Error (Status ${statusCode || 'Unknown'}) ${debugInfo}`,
 			description: errorMessage,
 		});
 	}
@@ -332,6 +390,59 @@ export async function sophosCentralApiRequestAllItems(
 	} while (page <= totalPages);
 
 	return returnData;
+}
+
+// Helper to get firewalls from all tenants for Partner accounts
+export async function getAllTenantsFirewalls(
+	this: IExecuteFunctions,
+	credentials: ISophosCentralCredentials,
+	returnAll: boolean,
+	limit?: number,
+): Promise<IDataObject[]> {
+	const tenants = await getTenantList.call(this, credentials);
+	const allFirewalls: IDataObject[] = [];
+
+	for (const tenant of tenants) {
+		try {
+			let tenantFirewalls: IDataObject[];
+			if (returnAll) {
+				tenantFirewalls = await sophosCentralApiRequestAllItems.call(
+					this,
+					'GET',
+					'/firewall/v1/firewalls',
+					{},
+					{},
+					tenant.id,
+				);
+			} else {
+				const response = await sophosCentralApiRequest.call(
+					this,
+					'GET',
+					'/firewall/v1/firewalls',
+					{},
+					{ page: 1, pageSize: limit || 50, pageTotal: false },
+					tenant.id,
+				);
+				tenantFirewalls = ((response as IDataObject).items as IDataObject[]) || [];
+			}
+
+			// Add tenant info to each firewall
+			for (const firewall of tenantFirewalls) {
+				firewall.tenant = {
+					id: tenant.id,
+					name: tenant.name,
+					dataRegion: tenant.dataRegion,
+				};
+			}
+
+			allFirewalls.push(...tenantFirewalls);
+		} catch {
+			// If a tenant fails (e.g., no firewall access), continue with other tenants
+			continue;
+		}
+	}
+
+	return allFirewalls;
 }
 
 declare const setTimeout: (handler: () => void, timeout: number) => unknown;

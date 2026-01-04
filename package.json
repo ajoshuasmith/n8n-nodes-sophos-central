@@ -37,7 +37,7 @@
 		"node": ">=18.17.0"
 	},
 	"scripts": {
-		"build": "n8n-node build",
+		"build": "n8n-node build && cp nodes/SophosCentral/*.svg dist/nodes/SophosCentral/",
 		"build:watch": "tsc --watch",
 		"dev": "n8n-node dev",
 		"lint": "n8n-node lint",

@@ -8,9 +8,10 @@ import type {
 	INodeTypeDescription,
 } from 'n8n-workflow';
 
-import { NodeOperationError } from 'n8n-workflow';
+import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
 import {
+	getAllTenantsFirewalls,
 	getTenantList,
 	resolveTenantId,
 	sleep,
@@ -20,7 +21,7 @@ import {
 
 import { operationFields, resourceFields } from './descriptions';
 
-import type { ISophosCentralCredentials } from './types';
+import type { ISophosCentralCredentials, ITenant } from './types';
 
 interface IPagination {
 	total?: number;
@@ -48,7 +49,7 @@ export class SophosCentral implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Sophos Central',
 		name: 'sophosCentral',
-		icon: 'file:images/sophos-central.svg',
+		icon: 'file:sophosCentral.svg',
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
@@ -73,16 +74,20 @@ export class SophosCentral implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
+						name: 'Alert',
+						value: 'alert',
+					},
+					{
 						name: 'Firewall',
 						value: 'firewall',
 					},
 					{
-						name: 'Firmware',
-						value: 'firmware',
+						name: 'Firewall Group',
+						value: 'firewallGroup',
 					},
 					{
-						name: 'Backup',
-						value: 'backup',
+						name: 'Firmware',
+						value: 'firmware',
 					},
 					{
 						name: 'Health',
@@ -123,7 +128,8 @@ export class SophosCentral implements INodeType {
 					: tenants;
 
 				const pageSize = 100;
-				const page = paginationToken ? parseInt(paginationToken, 10) : 1;
+				// Validate pagination token with safe fallback
+				const page = paginationToken ? Math.max(1, parseInt(paginationToken, 10) || 1) : 1;
 				const start = (page - 1) * pageSize;
 				const end = start + pageSize;
 				const pageItems = filtered.slice(start, end);
@@ -164,17 +170,31 @@ export class SophosCentral implements INodeType {
 					return { results: [] };
 				}
 
-				const tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
+				let tenantId: string;
+				try {
+					tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
+				} catch {
+					// If tenant resolution fails, return empty results
+					return { results: [] };
+				}
 
-				const page = paginationToken ? parseInt(paginationToken, 10) : 1;
-				const response = await sophosCentralApiRequest.call(
-					this,
-					'GET',
-					'/firewall/v1/firewalls',
-					{},
-					{ page, pageSize: 100, pageTotal: true },
-					tenantId,
-				);
+				// Validate pagination token with safe fallback
+				const page = paginationToken ? Math.max(1, parseInt(paginationToken, 10) || 1) : 1;
+				let response: IDataObject;
+				try {
+					response = await sophosCentralApiRequest.call(
+						this,
+						'GET',
+						'/firewall/v1/firewalls',
+						{},
+						{ page, pageSize: 100, pageTotal: true },
+						tenantId,
+					);
+				} catch (error) {
+					// If the API call fails (e.g., tenant doesn't have firewall access),
+					// return empty results so user can still manually enter a firewall ID
+					return { results: [] };
+				}
 
 				const responseData = response as IListResponse<FirewallListItem>;
 				const items = responseData.items || [];
@@ -241,16 +261,27 @@ export class SophosCentral implements INodeType {
 					return { results: [] };
 				}
 
-				const tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
+				let tenantId: string;
+				try {
+					tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
+				} catch {
+					return { results: [] };
+				}
 
-				const check = (await sophosCentralApiRequest.call(
-					this,
-					'POST',
-					'/firewall/v1/firewalls/actions/firmware-upgrade-check',
-					{ firewalls: [firewallId] },
-					{},
-					tenantId,
-				)) as FirmwareUpgradeCheckResponse;
+				let check: FirmwareUpgradeCheckResponse;
+				try {
+					check = (await sophosCentralApiRequest.call(
+						this,
+						'POST',
+						'/firewall/v1/firewalls/actions/firmware-upgrade-check',
+						{ firewalls: [firewallId] },
+						{},
+						tenantId,
+					)) as FirmwareUpgradeCheckResponse;
+				} catch {
+					// If API call fails, return empty results so user can manually enter version
+					return { results: [] };
+				}
 
 				const firewall = Array.isArray(check.firewalls) ? check.firewalls[0] : undefined;
 				const allowed = new Set<string>(
@@ -266,7 +297,8 @@ export class SophosCentral implements INodeType {
 					);
 
 				const pageSize = 100;
-				const page = paginationToken ? parseInt(paginationToken, 10) : 1;
+				// Validate pagination token with safe fallback
+				const page = paginationToken ? Math.max(1, parseInt(paginationToken, 10) || 1) : 1;
 				const start = (page - 1) * pageSize;
 				const end = start + pageSize;
 				const pageItems = filtered.slice(start, end);
@@ -278,6 +310,71 @@ export class SophosCentral implements INodeType {
 						value: v.version,
 						description: v.size ? `Size: ${v.size}` : undefined,
 					})),
+					paginationToken: nextToken,
+				};
+			},
+
+			alertSearch: async function (
+				this: ILoadOptionsFunctions,
+				filter?: string,
+				paginationToken?: string,
+			): Promise<INodeListSearchResult> {
+				const tenantIdRaw = getResourceLocatorValue(
+					this.getNodeParameter('tenantId', 0) as unknown,
+				);
+
+				let tenantId: string;
+				try {
+					tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
+				} catch {
+					return { results: [] };
+				}
+
+				// Validate pagination token with safe fallback
+				const page = paginationToken ? Math.max(1, parseInt(paginationToken, 10) || 1) : 1;
+				let response: IDataObject;
+				try {
+					const qs: IDataObject = { page, pageSize: 100, pageTotal: true };
+					qs.sort = 'createdAt:desc';
+					
+					response = await sophosCentralApiRequest.call(
+						this,
+						'GET',
+						'/common/v1/alerts',
+						{},
+						qs,
+						tenantId,
+					);
+				} catch {
+					return { results: [] };
+				}
+
+				const responseData = response as IListResponse<IDataObject>;
+				const items = responseData.items || [];
+				const normalizedFilter = filter?.toLowerCase();
+
+				const filtered = normalizedFilter
+					? items.filter((a) => 
+						String(a.description || '').toLowerCase().includes(normalizedFilter) ||
+						String(a.type || '').toLowerCase().includes(normalizedFilter)
+					)
+					: items;
+
+				const totalPages =
+					typeof responseData.pages?.total === 'number' ? responseData.pages.total : page;
+				const nextToken = page < totalPages ? String(page + 1) : undefined;
+
+				return {
+					results: filtered.map((alert) => {
+						const actions = Array.isArray(alert.allowedActions) ? alert.allowedActions : [];
+						const actionTag = actions.length > 0 ? '[Actionable]' : '[Info Only]';
+						const baseName = (alert.description as string) || (alert.type as string) || (alert.id as string);
+						return {
+							name: `${actionTag} ${baseName}`,
+							value: alert.id as string,
+							description: alert.severity ? `Severity: ${alert.severity} | Actions: ${actions.join(', ') || 'None'}` : undefined,
+						};
+					}),
 					paginationToken: nextToken,
 				};
 			},
@@ -296,7 +393,14 @@ export class SophosCentral implements INodeType {
 				const tenantIdRaw = getResourceLocatorValue(
 					this.getNodeParameter('tenantId', i) as unknown,
 				);
-				const tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
+				
+				let tenantId: string | undefined;
+				try {
+					tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
+				} catch (error) {
+					// Fallthrough: tenantId remains undefined for "All Tenants" mode (Partner)
+					// Individual operations will validate if they strictly require a tenantId
+				}
 
 				if (resource === 'firewall') {
 					if (operation === 'get') {
@@ -308,45 +412,72 @@ export class SophosCentral implements INodeType {
 							throw new NodeOperationError(this.getNode(), 'Firewall is required');
 						}
 
-						const responseData = await sophosCentralApiRequest.call(
+						/* 
+						 * Workaround for Partner API 404s:
+						 * Direct GET /firewalls/{id} often fails with 404 for Partner credentials 
+						 * even when the firewall exists. We use the list endpoint with local filtering instead.
+						 */
+						const allFirewalls = await sophosCentralApiRequestAllItems.call(
 							this,
 							'GET',
-							`/firewall/v1/firewalls/${firewallId}`,
+							'/firewall/v1/firewalls',
+							{},
+							{}, // No filters supported by API directly, so we fetch all and find
+							tenantId,
+						);
+
+						const firewall = allFirewalls.find((f: IDataObject) => f.id === firewallId);
+
+						if (!firewall) {
+							throw new NodeApiError(this.getNode(), { message: 'Firewall not found in tenant' }, { httpCode: '404' });
+						}
+
+						returnData.push({ json: firewall, pairedItem: { item: i } });
+					}
+
+					if (operation === 'getAll') {
+					type FirewallFilters = { name?: string; serial?: string; firmwareVersion?: string };
+
+					const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+					const filters = this.getNodeParameter('filters', i, {}) as FirewallFilters;
+
+					let responseItems: IDataObject[];
+
+					// Check if we should fetch from all tenants
+					if (!tenantId) {
+						const credentials = (await this.getCredentials(
+							'sophosCentralApi',
+						)) as unknown as ISophosCentralCredentials;
+
+						if (credentials.accountType !== 'partner') {
+							throw new NodeOperationError(
+								this.getNode(),
+								'Fetching firewalls from all tenants is only available for Partner accounts.',
+							);
+						}
+
+						const limit = returnAll ? undefined : (this.getNodeParameter('limit', i) as number);
+						responseItems = await getAllTenantsFirewalls.call(this, credentials, returnAll, limit);
+					} else if (returnAll) {
+						responseItems = await sophosCentralApiRequestAllItems.call(
+							this,
+							'GET',
+							'/firewall/v1/firewalls',
 							{},
 							{},
 							tenantId,
 						);
-
-						returnData.push({ json: responseData, pairedItem: { item: i } });
-					}
-
-					if (operation === 'getAll') {
-						type FirewallFilters = { name?: string; serial?: string; firmwareVersion?: string };
-
-						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
-						const filters = this.getNodeParameter('filters', i, {}) as FirewallFilters;
-
-						let responseItems: IDataObject[];
-						if (returnAll) {
-							responseItems = await sophosCentralApiRequestAllItems.call(
-								this,
-								'GET',
-								'/firewall/v1/firewalls',
-								{},
-								{},
-								tenantId,
-							);
-						} else {
-							const limit = this.getNodeParameter('limit', i) as number;
-							const response = await sophosCentralApiRequest.call(
-								this,
-								'GET',
-								'/firewall/v1/firewalls',
-								{},
-								{ page: 1, pageSize: limit, pageTotal: false },
-								tenantId,
-							);
-							responseItems = (response as IListResponse<IDataObject>).items || [];
+					} else {
+						const limit = this.getNodeParameter('limit', i) as number;
+						const response = await sophosCentralApiRequest.call(
+							this,
+							'GET',
+							'/firewall/v1/firewalls',
+							{},
+							{ page: 1, pageSize: limit, pageTotal: false },
+							tenantId,
+						);
+						responseItems = (response as IListResponse<IDataObject>).items || [];
 						}
 
 						if (filters.name) {
@@ -389,25 +520,107 @@ export class SophosCentral implements INodeType {
 						firmwareVersions?: Array<{ version: string; size?: string }>;
 					};
 
-					const firewallId = getResourceLocatorValue(
-						this.getNodeParameter('firewallId', i) as unknown,
-					);
-
-					if (!firewallId) {
-						throw new NodeOperationError(this.getNode(), 'Firewall is required');
-					}
 
 					if (operation === 'getCurrent' || operation === 'getUpgradeStatus') {
-						const responseData = await sophosCentralApiRequest.call(
-							this,
-							'POST',
-							'/firewall/v1/firewalls/actions/firmware-upgrade-check',
-							{ firewalls: [firewallId] },
-							{},
-							tenantId,
+						const firewallId = getResourceLocatorValue(
+							this.getNodeParameter('firewallId', i) as unknown,
 						);
 
-						returnData.push({ json: responseData, pairedItem: { item: i } });
+						// Single firewall mode (existing logic)
+						if (firewallId) {
+							if (!tenantId) {
+								throw new NodeOperationError(
+									this.getNode(),
+									'Tenant ID is required when checking a specific firewall.',
+								);
+							}
+							const responseData = await sophosCentralApiRequest.call(
+								this,
+								'POST',
+								'/firewall/v1/firewalls/actions/firmware-upgrade-check',
+								{ firewalls: [firewallId] },
+								{},
+								tenantId,
+							);
+							returnData.push({ json: responseData, pairedItem: { item: i } });
+						} 
+						// Multi-tenant / All firewalls mode
+						else {
+							const credentials = (await this.getCredentials(
+								'sophosCentralApi',
+							)) as unknown as ISophosCentralCredentials;
+
+							if (credentials.accountType !== 'partner' && !tenantId) {
+								throw new NodeOperationError(
+									this.getNode(),
+									'Tenant ID is required for Organization accounts.',
+								);
+							}
+
+							let firewallsToCheck: IDataObject[] = [];
+
+							if (tenantId) {
+								// Get all firewalls for specific tenant
+								firewallsToCheck = await sophosCentralApiRequestAllItems.call(
+									this,
+									'GET',
+									'/firewall/v1/firewalls',
+									{},
+									{},
+									tenantId,
+								);
+								// Add tenantId to each for the next step
+								firewallsToCheck.forEach(f => f.tenantId = tenantId);
+							} else {
+								// Get all firewalls for all tenants
+								firewallsToCheck = await getAllTenantsFirewalls.call(this, credentials, true);
+								// getAllTenantsFirewalls adds .tenant object, we need flattened tenantId for next step
+								firewallsToCheck.forEach(f => f.tenantId = (f.tenant as ITenant).id);
+							}
+
+							// Group by tenant because the check endpoint is per-tenant
+							const firewallsByTenant: { [key: string]: string[] } = {};
+							for (const fw of firewallsToCheck) {
+								const tid = fw.tenantId as string;
+								if (!firewallsByTenant[tid]) firewallsByTenant[tid] = [];
+								firewallsByTenant[tid].push(fw.id as string);
+							}
+
+							// Check upgrades for each tenant's firewalls
+							for (const [tid, fwIds] of Object.entries(firewallsByTenant)) {
+								// Batch in groups of 100 (API limit)
+								for (let j = 0; j < fwIds.length; j += 100) {
+									const batch = fwIds.slice(j, j + 100);
+									try {
+										const response = await sophosCentralApiRequest.call(
+											this,
+											'POST',
+											'/firewall/v1/firewalls/actions/firmware-upgrade-check',
+											{ firewalls: batch },
+											{},
+											tid,
+										);
+										
+										// Process results to add tenant info back
+										const results = (response as FirmwareUpgradeCheckResponse).firewalls || [];
+										for (const result of results) {
+											// Match result to original firewall to get name/hostname if needed
+											const original = firewallsToCheck.find(f => f.id === (result as any).id); // API returns ID in result
+											const combined = {
+												...result,
+												tenantId: tid,
+												firewallName: original?.name,
+												firewallHostname: original?.hostname
+											};
+											returnData.push({ json: combined as IDataObject, pairedItem: { item: i } });
+										}
+									} catch (e) {
+										// Continue if one tenant fails
+										continue;
+									}
+								}
+							}
+						}
 					}
 
 					if (operation === 'upgrade') {
@@ -417,6 +630,10 @@ export class SophosCentral implements INodeType {
 							timeout?: number;
 						};
 						type UpgradeInfo = { id: string; upgradeToVersion: string; upgradeAt?: string };
+
+						const firewallId = getResourceLocatorValue(
+							this.getNodeParameter('firewallId', i) as unknown,
+						);
 
 						const targetVersion = getResourceLocatorValue(
 							this.getNodeParameter('targetVersion', i) as unknown,
@@ -454,7 +671,12 @@ export class SophosCentral implements INodeType {
 								throw new NodeOperationError(this.getNode(), 'Scheduled time is required');
 							}
 
-							upgradeInfo.upgradeAt = scheduledTime;
+							// Transform to ISO 8601 format required by Sophos API
+							const date = new Date(scheduledTime);
+							if (isNaN(date.getTime())) {
+								throw new NodeOperationError(this.getNode(), 'Invalid scheduled time format');
+							}
+							upgradeInfo.upgradeAt = date.toISOString();
 						}
 
 						const upgradeResponse = await sophosCentralApiRequest.call(
@@ -530,6 +752,9 @@ export class SophosCentral implements INodeType {
 					}
 
 					if (operation === 'cancelUpgrade') {
+						const firewallId = getResourceLocatorValue(
+							this.getNodeParameter('firewallId', i) as unknown,
+						);
 						const responseData = await sophosCentralApiRequest.call(
 							this,
 							'DELETE',
@@ -567,23 +792,49 @@ export class SophosCentral implements INodeType {
 							throw new NodeOperationError(this.getNode(), 'Firewall is required');
 						}
 
-						const responseData = await sophosCentralApiRequest.call(
+						/* 
+						 * Workaround for Partner API 404s:
+						 * Direct GET /firewalls/{id} often fails with 404 for Partner credentials.
+						 * We use the list endpoint with local filtering instead.
+						 */
+						const allFirewalls = await sophosCentralApiRequestAllItems.call(
 							this,
 							'GET',
-							`/firewall/v1/firewalls/${firewallId}`,
+							'/firewall/v1/firewalls',
 							{},
 							{},
 							tenantId,
 						);
 
-						returnData.push({ json: responseData, pairedItem: { item: i } });
+						const firewall = allFirewalls.find((f: IDataObject) => f.id === firewallId);
+
+						if (!firewall) {
+							throw new NodeApiError(this.getNode(), { message: 'Firewall not found in tenant' }, { httpCode: '404' });
+						}
+
+						returnData.push({ json: firewall, pairedItem: { item: i } });
 					}
 
 					if (operation === 'getAll') {
 						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
 						let responseItems: IDataObject[];
 
-						if (returnAll) {
+						// Check if we should fetch from all tenants
+						if (!tenantId) {
+							const credentials = (await this.getCredentials(
+								'sophosCentralApi',
+							)) as unknown as ISophosCentralCredentials;
+
+							if (credentials.accountType !== 'partner') {
+								throw new NodeOperationError(
+									this.getNode(),
+									'Fetching health from all tenants is only available for Partner accounts.',
+								);
+							}
+
+							const limit = returnAll ? undefined : (this.getNodeParameter('limit', i) as number);
+							responseItems = await getAllTenantsFirewalls.call(this, credentials, returnAll, limit);
+						} else if (returnAll) {
 							responseItems = await sophosCentralApiRequestAllItems.call(
 								this,
 								'GET',
@@ -607,6 +858,164 @@ export class SophosCentral implements INodeType {
 
 						for (const item of responseItems) {
 							returnData.push({ json: item, pairedItem: { item: i } });
+						}
+					}
+				}
+
+				if (resource === 'firewallGroup') {
+					if (operation === 'get') {
+						const groupId = getResourceLocatorValue(
+							this.getNodeParameter('firewallGroupId', i) as unknown,
+						);
+						const responseData = await sophosCentralApiRequest.call(
+							this,
+							'GET',
+							`/firewall/v1/firewall-groups/${groupId}`,
+							{},
+							{},
+							tenantId,
+						);
+						returnData.push({ json: responseData, pairedItem: { item: i } });
+					}
+
+					if (operation === 'getAll') {
+						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+						let responseItems: IDataObject[];
+
+						if (returnAll) {
+							responseItems = await sophosCentralApiRequestAllItems.call(
+								this,
+								'GET',
+								'/firewall/v1/firewall-groups',
+								{},
+								{},
+								tenantId,
+							);
+						} else {
+							const limit = this.getNodeParameter('limit', i) as number;
+							const response = await sophosCentralApiRequest.call(
+								this,
+								'GET',
+								'/firewall/v1/firewall-groups',
+								{},
+								{ page: 1, pageSize: limit, pageTotal: false },
+								tenantId,
+							);
+							responseItems = (response as IListResponse<IDataObject>).items || [];
+						}
+
+						for (const item of responseItems) {
+							returnData.push({ json: item, pairedItem: { item: i } });
+						}
+					}
+
+					if (operation === 'getSyncStatus') {
+						const groupId = getResourceLocatorValue(
+							this.getNodeParameter('firewallGroupId', i) as unknown,
+						);
+						// Endpoint: /firewall-groups/{groupId}/firewalls/sync-status
+						// Note: This often returns 202 Accepted + Location header for async status, 
+						// but simpler method gets immediate list if available.
+						// Checking documentation: The sync-status endpoint is synchronous for list.
+						const responseData = await sophosCentralApiRequest.call(
+							this,
+							'GET',
+							`/firewall/v1/firewall-groups/${groupId}/firewalls/sync-status`,
+							{},
+							{},
+							tenantId,
+						);
+						
+						// The response items are firewalls with their sync status
+						const items = (responseData.items as IDataObject[]) || [];
+						for (const item of items) {
+							returnData.push({ json: item, pairedItem: { item: i } });
+						}
+					}
+				}
+
+				if (resource === 'alert') {
+					// Common API (Alerts)
+					const baseUrl = '/common/v1/alerts';
+					
+					if (operation === 'get') {
+						const alertId = this.getNodeParameter('alertId', i) as string;
+						const responseData = await sophosCentralApiRequest.call(
+							this,
+							'GET',
+							`${baseUrl}/${alertId}`,
+							{},
+							{},
+							tenantId,
+						);
+						returnData.push({ json: responseData, pairedItem: { item: i } });
+					}
+
+					if (operation === 'getAll') {
+						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+						const filters = this.getNodeParameter('filters', i, {}) as {
+							severity?: string[];
+							product?: string;
+							from?: string;
+						};
+						
+						const qs: IDataObject = {};
+						if (filters.severity) qs.severity = filters.severity; // array
+						if (filters.product) qs.product = filters.product;
+						if (filters.from) qs.from = filters.from;
+
+						let responseItems: IDataObject[];
+
+						if (returnAll) {
+							responseItems = await sophosCentralApiRequestAllItems.call(
+								this,
+								'GET',
+								baseUrl,
+								{},
+								qs,
+								tenantId,
+							);
+						} else {
+							const limit = this.getNodeParameter('limit', i) as number;
+							qs.page = 1;
+							qs.pageSize = limit;
+							qs.pageTotal = false;
+							
+							const response = await sophosCentralApiRequest.call(
+								this,
+								'GET',
+								baseUrl,
+								{},
+								qs,
+								tenantId,
+							);
+							responseItems = (response as IListResponse<IDataObject>).items || [];
+						}
+
+						for (const item of responseItems) {
+							returnData.push({ json: item, pairedItem: { item: i } });
+						}
+					}
+
+					if (operation === 'performAction') {
+						const alertIdsRaw = getResourceLocatorValue(
+							this.getNodeParameter('alertId', i) as unknown,
+						);
+						const action = this.getNodeParameter('action', i) as string;
+						
+						// Support comma-separated IDs for batch operations
+						const alertIds = alertIdsRaw.split(',').map((id) => id.trim()).filter((id) => id);
+
+						for (const alertId of alertIds) {
+							const responseData = await sophosCentralApiRequest.call(
+								this,
+								'POST',
+								`${baseUrl}/${alertId}/actions`,
+								{ action },
+								{},
+								tenantId,
+							);
+							returnData.push({ json: responseData, pairedItem: { item: i } });
 						}
 					}
 				}

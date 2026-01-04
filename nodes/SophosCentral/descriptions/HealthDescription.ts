@@ -35,10 +35,11 @@ export const healthFields: INodeProperties[] = [
 		name: 'tenantId',
 		type: 'resourceLocator',
 		default: { mode: 'list', value: '' },
-		description: 'Tenant to perform the operation on (required for Partner credentials)',
+		description: 'Tenant to perform the operation on (required for Get operation)',
 		displayOptions: {
 			show: {
 				resource: ['health'],
+				operation: ['get'],
 			},
 		},
 		modes: [
@@ -56,6 +57,43 @@ export const healthFields: INodeProperties[] = [
 				name: 'id',
 				type: 'string',
 				placeholder: 'e.g. {{ $json.tenantId }}',
+			},
+		],
+	},
+	{
+		displayName: 'Tenant',
+		name: 'tenantId',
+		type: 'resourceLocator',
+		default: { mode: 'list', value: '' },
+		description: 'Leave empty to get health from ALL tenants (Partner accounts only). Select a specific tenant to filter results.',
+		displayOptions: {
+			show: {
+				resource: ['health'],
+				operation: ['getAll'],
+			},
+		},
+		modes: [
+			{
+				displayName: 'All Tenants',
+				name: 'all',
+				type: 'string',
+				placeholder: 'Leave empty for all tenants',
+				hint: 'Leave this field empty to get firewalls from all tenants',
+			},
+			{
+				displayName: 'From List',
+				name: 'list',
+				type: 'list',
+				typeOptions: {
+					searchListMethod: 'tenantSearch',
+					searchable: true,
+				},
+			},
+			{
+				displayName: 'By ID',
+				name: 'id',
+				type: 'string',
+				placeholder: 'e.g. a1b2c3d4-e5f6-7890-abcd-ef1234567890',
 			},
 		],
 	},

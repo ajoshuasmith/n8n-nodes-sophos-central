@@ -19,23 +19,10 @@ export const firmwareOperations: INodeProperties[] = [
 				action: 'Cancel firmware upgrade',
 			},
 			{
-				name: 'Check Upgrade (No Status Endpoint)',
-				value: 'getUpgradeStatus',
-				description:
-					'Re-check current version and available upgrades (Sophos Central API does not provide a status endpoint)',
-				action: 'Check upgrade status',
-			},
-			{
 				name: 'Check Upgrades',
 				value: 'getCurrent',
 				description: 'Check firmware version and available upgrades for a firewall',
 				action: 'Check firmware upgrades',
-			},
-			{
-				name: 'Get Upgrade History (Not Supported)',
-				value: 'getUpgradeHistory',
-				description: 'Not supported by Sophos Central Firewall API v1',
-				action: 'Get upgrade history',
 			},
 			{
 				name: 'Upgrade',
@@ -54,10 +41,11 @@ export const firmwareFields: INodeProperties[] = [
 		name: 'tenantId',
 		type: 'resourceLocator',
 		default: { mode: 'list', value: '' },
-		description: 'Tenant to perform the operation on (required for Partner credentials)',
+		description: 'Tenant to perform the operation on',
 		displayOptions: {
 			show: {
 				resource: ['firmware'],
+				operation: ['upgrade', 'cancelUpgrade'],
 			},
 		},
 		modes: [
@@ -79,12 +67,49 @@ export const firmwareFields: INodeProperties[] = [
 		],
 	},
 	{
+		displayName: 'Tenant',
+		name: 'tenantId',
+		type: 'resourceLocator',
+		default: { mode: 'list', value: '' },
+		description: 'Leave empty to check ALL tenants (Partner accounts only). Select a specific tenant to filter results.',
+		displayOptions: {
+			show: {
+				resource: ['firmware'],
+				operation: ['getCurrent', 'getUpgradeStatus'],
+			},
+		},
+		modes: [
+			{
+				displayName: 'All Tenants',
+				name: 'all',
+				type: 'string',
+				placeholder: 'Leave empty for all tenants',
+				hint: 'Leave this field empty to check firewalls from all tenants',
+			},
+			{
+				displayName: 'From List',
+				name: 'list',
+				type: 'list',
+				typeOptions: {
+					searchListMethod: 'tenantSearch',
+					searchable: true,
+				},
+			},
+			{
+				displayName: 'By ID',
+				name: 'id',
+				type: 'string',
+				placeholder: 'e.g. a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+			},
+		],
+	},
+	{
 		displayName: 'Firewall',
 		name: 'firewallId',
 		type: 'resourceLocator',
 		default: { mode: 'list', value: '' },
 		required: true,
-		description: 'Firewall to operate on',
+		description: 'Select from the list or provide the Firewall UUID (not Serial Number). The list displays names/serials for readability but uses UUIDs internally.',
 		displayOptions: {
 			show: {
 				resource: ['firmware'],
