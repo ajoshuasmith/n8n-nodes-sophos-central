@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Sophos Central">
+	<defs>
+		<linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+			<stop offset="0" stop-color="#1b9ad7"/>
+			<stop offset="1" stop-color="#0b6aa8"/>
+		</linearGradient>
+	</defs>
+	<rect x="12" y="12" width="104" height="104" rx="24" fill="url(#g)"/>
+	<path d="M64 28c18 0 32 10 32 24v20c0 18-14 32-32 32S32 90 32 72V52c0-14 14-24 32-24Z" fill="#ffffff" opacity="0.14"/>
+	<path d="M46 64c0-10 8-18 18-18h14c2.2 0 4 1.8 4 4s-1.8 4-4 4H64c-5.5 0-10 4.5-10 10s4.5 10 10 10h6c5.5 0 10-4.5 10-10 0-2.2 1.8-4 4-4s4 1.8 4 4c0 10-8 18-18 18h-6c-10 0-18-8-18-18Z" fill="#ffffff"/>
+</svg>

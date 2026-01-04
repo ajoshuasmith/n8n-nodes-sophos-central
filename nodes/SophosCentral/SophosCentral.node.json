@@ -1,0 +1,17 @@
+{
+	"node": "@ajoshuasmith/n8n-nodes-sophos-central.SophosCentral",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Security"],
+	"subcategories": {
+		"Security": ["Firewall"]
+	},
+	"alias": ["Sophos", "Sophos Central", "Firewall", "Firmware"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://developer.sophos.com/firewall-management"
+			}
+		]
+	}
+}
