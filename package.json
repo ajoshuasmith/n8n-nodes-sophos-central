@@ -1,5 +1,5 @@
 {
-	"name": "@ajoshuasmith/n8n-nodes-sophos-central",
+	"name": "@joshuanode/n8n-nodes-sophos-central",
 	"version": "0.1.0-beta.1",
 	"description": "n8n community node for Sophos Central (Firewall Management API)",
 	"license": "MIT",

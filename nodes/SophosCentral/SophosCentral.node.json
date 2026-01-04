@@ -1,5 +1,5 @@
 {
-	"node": "@ajoshuasmith/n8n-nodes-sophos-central.SophosCentral",
+	"node": "@joshuanode/n8n-nodes-sophos-central.SophosCentral",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Security"],

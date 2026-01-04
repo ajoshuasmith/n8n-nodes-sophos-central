@@ -1,6 +1,6 @@
 # Sophos Central Node for n8n
 
-[![npm version](https://img.shields.io/npm/v/@ajoshuasmith/n8n-nodes-sophos-central?style=flat-square)](https://www.npmjs.com/package/@ajoshuasmith/n8n-nodes-sophos-central)
+[![npm version](https://img.shields.io/npm/v/@joshuanode/n8n-nodes-sophos-central?style=flat-square)](https://www.npmjs.com/package/@joshuanode/n8n-nodes-sophos-central)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![n8n community](https://img.shields.io/badge/n8n-community%20node-ff6d5a?style=flat-square)](https://n8n.io)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -31,13 +31,13 @@ Community node for the **Sophos Central Firewall Management API** — built for 
 **Community Nodes (Recommended)**
 
 1. In n8n, go to **Settings → Community Nodes → Install**
-2. Enter: `@ajoshuasmith/n8n-nodes-sophos-central`
+2. Enter: `@joshuanode/n8n-nodes-sophos-central`
 3. Click **Install**
 
 **Manual Installation**
 
 ```bash
-npm install @ajoshuasmith/n8n-nodes-sophos-central
+npm install @joshuanode/n8n-nodes-sophos-central
 ```
 
 ---
