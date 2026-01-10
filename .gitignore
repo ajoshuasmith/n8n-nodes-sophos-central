@@ -24,3 +24,4 @@ pnpm-debug.log*
 ._*
 .idea/
 .vscode/
+.workflows/

@@ -167,6 +167,13 @@ export const alertFields: INodeProperties[] = [
 			},
 		},
 		options: [
+{
+displayName: 'Only Actionable',
+name: 'onlyActionable',
+type: 'boolean',
+default: false,
+description: 'Whether to return only alerts that have allowed actions (excludes acknowledged/resolved alerts)',
+},
 			{
 				displayName: 'Severity',
 				name: 'severity',

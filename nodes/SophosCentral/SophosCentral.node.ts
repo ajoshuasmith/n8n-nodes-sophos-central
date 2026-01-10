@@ -93,6 +93,10 @@ export class SophosCentral implements INodeType {
 						name: 'Health',
 						value: 'health',
 					},
+{
+name: 'Organization',
+value: 'organization',
+},
 				],
 				default: 'firewall',
 			},
@@ -954,6 +958,7 @@ export class SophosCentral implements INodeType {
 					if (operation === 'getAll') {
 						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
 						const filters = this.getNodeParameter('filters', i, {}) as {
+							onlyActionable?: boolean;
 							severity?: string[];
 							product?: string;
 							from?: string;
@@ -992,8 +997,25 @@ export class SophosCentral implements INodeType {
 							responseItems = (response as IListResponse<IDataObject>).items || [];
 						}
 
-						for (const item of responseItems) {
-							returnData.push({ json: item, pairedItem: { item: i } });
+						// Apply onlyActionable filter and add computed fields
+						let filteredItems = responseItems;
+						if (filters.onlyActionable) {
+							filteredItems = responseItems.filter((alert) => {
+								const actions = Array.isArray(alert.allowedActions) ? alert.allowedActions : [];
+								return actions.length > 0;
+							});
+						}
+
+						// Add computed fields to each alert
+						for (const item of filteredItems) {
+							const actions = Array.isArray(item.allowedActions) ? item.allowedActions : [];
+							const enrichedItem = {
+								...item,
+								isActionable: actions.length > 0,
+								actionCount: actions.length,
+								hasBeenActioned: actions.length === 0,
+							};
+							returnData.push({ json: enrichedItem, pairedItem: { item: i } });
 						}
 					}
 
@@ -1019,6 +1041,112 @@ export class SophosCentral implements INodeType {
 						}
 					}
 				}
+
+if (resource === 'organization') {
+const baseUrl = '/partner/v1/tenants';
+
+if (operation === 'create') {
+const name = this.getNodeParameter('name', i) as string;
+const dataGeography = this.getNodeParameter('dataGeography', i) as string;
+const billingType = this.getNodeParameter('billingType', i) as string;
+const contactFirstName = this.getNodeParameter('contactFirstName', i) as string;
+const contactLastName = this.getNodeParameter('contactLastName', i) as string;
+const contactEmail = this.getNodeParameter('contactEmail', i) as string;
+const contactPhone = this.getNodeParameter('contactPhone', i) as string;
+const addressLine1 = this.getNodeParameter('addressLine1', i) as string;
+const city = this.getNodeParameter('city', i) as string;
+const countryCode = this.getNodeParameter('countryCode', i) as string;
+const postalCode = this.getNodeParameter('postalCode', i) as string;
+const additionalFields = this.getNodeParameter('additionalFields', i, {}) as IDataObject;
+
+const body: IDataObject = {
+name,
+dataGeography,
+billingType,
+contact: {
+firstName: contactFirstName,
+lastName: contactLastName,
+email: contactEmail,
+phone: contactPhone,
+address: {
+address1: addressLine1,
+city,
+countryCode,
+postalCode,
+},
+},
+};
+
+if (additionalFields.showAs) body.showAs = additionalFields.showAs;
+if (additionalFields.addressLine2) {
+(body.contact as IDataObject).address = {
+...(body.contact as IDataObject).address,
+address2: additionalFields.addressLine2,
+};
+}
+if (additionalFields.state) {
+(body.contact as IDataObject).address = {
+...(body.contact as IDataObject).address,
+state: additionalFields.state,
+};
+}
+
+const responseData = await sophosCentralApiRequest.call(
+this,
+'POST',
+baseUrl,
+body,
+{},
+undefined,
+);
+returnData.push({ json: responseData, pairedItem: { item: i } });
+}
+
+if (operation === 'get') {
+const tenantId = this.getNodeParameter('tenantId', i) as string;
+const responseData = await sophosCentralApiRequest.call(
+this,
+'GET',
+`${baseUrl}/${tenantId}`,
+{},
+{},
+undefined,
+);
+returnData.push({ json: responseData, pairedItem: { item: i } });
+}
+
+if (operation === 'getAll') {
+const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+let responseItems: IDataObject[];
+
+if (returnAll) {
+responseItems = await sophosCentralApiRequestAllItems.call(
+this,
+'GET',
+baseUrl,
+{},
+{},
+undefined,
+);
+} else {
+const limit = this.getNodeParameter('limit', i) as number;
+const response = await sophosCentralApiRequest.call(
+this,
+'GET',
+baseUrl,
+{},
+{ page: 1, pageSize: limit, pageTotal: false },
+undefined,
+);
+responseItems = (response as IListResponse<IDataObject>).items || [];
+}
+
+for (const item of responseItems) {
+returnData.push({ json: item, pairedItem: { item: i } });
+}
+}
+}
+
 			} catch (error) {
 				if (this.continueOnFail()) {
 					returnData.push({

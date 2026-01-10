@@ -4,6 +4,7 @@ import { firewallFields, firewallOperations } from './FirewallDescription';
 import { firewallGroupFields, firewallGroupOperations } from './FirewallGroupDescription';
 import { firmwareFields, firmwareOperations } from './FirmwareDescription';
 import { healthFields, healthOperations } from './HealthDescription';
+import { organizationFields, organizationOperations } from './OrganizationDescription';
 
 export const operationFields = [
 	...alertOperations,
@@ -11,6 +12,7 @@ export const operationFields = [
 	...firewallGroupOperations,
 	...firmwareOperations,
 	...healthOperations,
+	...organizationOperations,
 ];
 
 export const resourceFields = [
@@ -19,4 +21,5 @@ export const resourceFields = [
 	...firewallGroupFields,
 	...firmwareFields,
 	...healthFields,
+	...organizationFields,
 ];
