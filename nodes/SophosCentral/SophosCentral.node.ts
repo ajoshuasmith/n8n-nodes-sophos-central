@@ -1079,14 +1079,18 @@ postalCode,
 
 if (additionalFields.showAs) body.showAs = additionalFields.showAs;
 if (additionalFields.addressLine2) {
-(body.contact as IDataObject).address = {
-...(body.contact as IDataObject).address,
+const contact = body.contact as IDataObject;
+const address = contact.address as IDataObject;
+contact.address = {
+...address,
 address2: additionalFields.addressLine2,
 };
 }
 if (additionalFields.state) {
-(body.contact as IDataObject).address = {
-...(body.contact as IDataObject).address,
+const contact = body.contact as IDataObject;
+const address = contact.address as IDataObject;
+contact.address = {
+...address,
 state: additionalFields.state,
 };
 }
