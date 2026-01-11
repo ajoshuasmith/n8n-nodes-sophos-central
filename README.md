@@ -29,27 +29,6 @@ Community node for the **Sophos Central Firewall Management API** — built for 
 
 ---
 
-## What's New in v0.3.0
-
-### Alert Enhancements
-
-- **"Only Actionable" Filter** — Filter alerts to show only those requiring action
-- **Computed Fields** — `isActionable`, `actionCount`, `hasBeenActioned` added to responses
-
-### Organization Management (Partner Only)
-
-- **Create Organization** — Provision new tenant organizations
-- **Get Organization** — Retrieve single tenant details
-- **Get Many Organizations** — List all managed tenants
-
-### Partner API Operations (Partner Only)
-
-- **Get Billing Usage** — Monthly usage reports by year/month
-- **Get Many Admins** — List all partner administrators
-- **Get Many Roles** — List available roles and permissions
-
----
-
 ## Installation
 
 **Community Nodes (Recommended)**
@@ -165,7 +144,6 @@ For managing a single account:
 
 - **Automatic Region Routing**: Caches tenant-to-region mapping
 - **Token Caching**: Caches OAuth tokens for 5 minutes
-- **Partner API Support**: Direct calls to Partner API endpoints
 
 ---
 
