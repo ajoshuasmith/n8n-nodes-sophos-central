@@ -96,10 +96,23 @@ export class SophosCentral implements INodeType {
 {
 name: 'Organization',
 value: 'organization',
+				description: 'Manage tenant organizations (Partner accounts only)',
 },
 				],
 				default: 'firewall',
 			},
+	{
+		displayName: 'Partner Account Required',
+		name: 'partnerNotice',
+		type: 'notice',
+		default: '',
+		displayOptions: {
+			show: {
+				resource: ['organization'],
+			},
+		},
+		description: 'Organization operations require Partner API credentials. Verify your credentials are configured for Partner (Multi-Tenant) account type.',
+	},
 			...operationFields,
 			...resourceFields,
 		],
