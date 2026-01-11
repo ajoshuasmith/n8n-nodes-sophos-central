@@ -12,8 +12,8 @@ import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
 import type { IAuthToken, ISophosCentralCredentials, ITenant } from './types';
 
+
 const tokenCache = new Map<string, IAuthToken>();
-const tenantApiHostCache = new Map<string, string>();
 
 function getCacheKey(credentials: ISophosCentralCredentials): string {
 	return `${credentials.clientId}:${credentials.clientSecret}`;
@@ -166,18 +166,6 @@ export async function getTenantList(
 
 		const items = (response as IDataObject).items as ITenant[] | undefined;
 		if (items?.length) {
-			for (const tenant of items) {
-				// Cache the apiHost for each tenant
-				// Check for various casing formats to ensure we catch the field
-				const host =
-					tenant.apiHost ||
-					(tenant as unknown as IDataObject)['api-host'] ||
-					(tenant as unknown as IDataObject).api_host;
-
-				if (tenant.id && host) {
-					tenantApiHostCache.set(tenant.id, host as string);
-				}
-			}
 			returnData.push(...items);
 		}
 
@@ -215,34 +203,50 @@ export async function getTenantApiHost(
 	this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions,
 	tenantId: string,
 ): Promise<string> {
-	// Check cache first
-	const cached = tenantApiHostCache.get(tenantId);
-	if (cached) {
-		return cached;
-	}
-
-	// For Partner accounts, fetch tenant list to populate cache
 	const credentials = (await this.getCredentials(
 		'sophosCentralApi',
 	)) as unknown as ISophosCentralCredentials;
 
 	if (credentials.accountType === 'partner') {
-		// Fetch tenants to populate the cache
-		await getTenantList.call(this, credentials);
-		const found = tenantApiHostCache.get(tenantId);
-		if (found) {
-			return found;
-		}
+		// Fetch the specific tenant to get its apiHost
+		const ctx = await getAuthContext.call(this, credentials);
+		
+		try {
+			const response = (await this.helpers.httpRequest({
+				method: 'GET',
+				url: `https://api.central.sophos.com/partner/v1/tenants/${tenantId}`,
+				headers: {
+					Authorization: `Bearer ${ctx.token}`,
+					'X-Partner-ID': ctx.partnerId as string,
+				},
+				json: true,
+			})) as IDataObject;
 
-		// If after fetching the list we still don't have the tenant, we shouldn't guess.
-		// Defaulting to the partner region often fails with obscure errors.
-		throw new NodeOperationError(
-			this.getNode(),
-			`Could not find API host for tenant ID '${tenantId}'. Ensure the tenant exists and is accessible by this Partner account.`,
-		);
+			// Get apiHost from response
+			const apiHost = response.apiHost || response['api-host'];
+			if (apiHost) {
+				return apiHost as string;
+			}
+
+			// Fallback: construct from dataRegion
+			const dataRegion = response.dataRegion || response['data-region'];
+			if (dataRegion) {
+				return `https://api-${dataRegion}.central.sophos.com`;
+			}
+
+			throw new NodeOperationError(
+				this.getNode(),
+				`Tenant '${tenantId}' found but no apiHost or dataRegion in response.`,
+			);
+		} catch (error) {
+			throw new NodeOperationError(
+				this.getNode(),
+				`Could not find tenant '${tenantId}'. Ensure it exists and is accessible by this Partner account.`,
+			);
+		}
 	}
 
-	// Fallback to Partner's/Organization's data region ensures backward compatibility for Org accounts
+	// For Organization accounts, use the auth context's data region
 	const ctx = await getAuthContext.call(this, credentials);
 	return ctx.dataRegion;
 }
