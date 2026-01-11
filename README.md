@@ -16,14 +16,37 @@ Community node for the **Sophos Central Firewall Management API** — built for 
 
 ## Features
 
-| Feature             | Description                                                       |
-| ------------------- | ----------------------------------------------------------------- |
-| **Multi-Tenant**    | Execute operations across all managed tenants in a single run     |
-| **Dynamic Regions** | Auto-routes to correct data region (`api-us01`, `api-eu01`, etc.) |
-| **Firewall Mgmt**   | List, retrieve, and monitor firewall status                       |
-| **Firmware Ops**    | Check compliance, schedule upgrades, cancel pending               |
-| **Alerting**        | Get alerts, acknowledge, resolve — with batch support             |
-| **Health Checks**   | Retrieve connection and managing status                           |
+| Feature               | Description                                                       |
+| --------------------- | ----------------------------------------------------------------- |
+| **Multi-Tenant**      | Execute operations across all managed tenants in a single run     |
+| **Dynamic Regions**   | Auto-routes to correct data region (`api-us01`, `api-eu01`, etc.) |
+| **Firewall Mgmt**     | List, retrieve, and monitor firewall status                       |
+| **Firmware Ops**      | Check compliance, schedule upgrades, cancel pending               |
+| **Alerting**          | Get alerts, acknowledge, resolve — with "Only Actionable" filter  |
+| **Health Checks**     | Retrieve connection and managing status                           |
+| **Partner APIs**      | Billing usage, admin management, roles (MSP only)                 |
+| **Tenant Management** | Create, get, list tenant organizations (MSP only)                 |
+
+---
+
+## What's New in v0.3.0
+
+### Alert Enhancements
+
+- **"Only Actionable" Filter** — Filter alerts to show only those requiring action
+- **Computed Fields** — `isActionable`, `actionCount`, `hasBeenActioned` added to responses
+
+### Organization Management (Partner Only)
+
+- **Create Organization** — Provision new tenant organizations
+- **Get Organization** — Retrieve single tenant details
+- **Get Many Organizations** — List all managed tenants
+
+### Partner API Operations (Partner Only)
+
+- **Get Billing Usage** — Monthly usage reports by year/month
+- **Get Many Admins** — List all partner administrators
+- **Get Many Roles** — List available roles and permissions
 
 ---
 
@@ -96,17 +119,33 @@ For managing a single account:
 
 ### Alerts
 
-| Operation          | Description                                        |
-| ------------------ | -------------------------------------------------- |
-| **Get**            | Retrieve a specific alert                          |
-| **Get Many**       | List alerts with filters (Severity, Product, Date) |
-| **Perform Action** | Acknowledge or Resolve (supports batch)            |
+| Operation          | Description                                                   |
+| ------------------ | ------------------------------------------------------------- |
+| **Get**            | Retrieve a specific alert                                     |
+| **Get Many**       | List alerts with filters (Severity, Product, Only Actionable) |
+| **Perform Action** | Acknowledge or Resolve (supports batch)                       |
 
 ### Health
 
 | Operation      | Description                   |
 | -------------- | ----------------------------- |
 | **Get Health** | Retrieve status for firewalls |
+
+### Organization (Partner Only)
+
+| Operation    | Description                           |
+| ------------ | ------------------------------------- |
+| **Create**   | Provision a new tenant organization   |
+| **Get**      | Retrieve tenant details by ID         |
+| **Get Many** | List all managed tenant organizations |
+
+### Partner (Partner Only)
+
+| Operation             | Description                              |
+| --------------------- | ---------------------------------------- |
+| **Get Billing Usage** | Monthly usage report for billing         |
+| **Get Many Admins**   | List all partner administrators          |
+| **Get Many Roles**    | List available roles and permission sets |
 
 ---
 
@@ -126,6 +165,7 @@ For managing a single account:
 
 - **Automatic Region Routing**: Caches tenant-to-region mapping
 - **Token Caching**: Caches OAuth tokens for 5 minutes
+- **Partner API Support**: Direct calls to Partner API endpoints
 
 ---
 
