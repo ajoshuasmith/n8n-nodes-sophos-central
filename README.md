@@ -120,11 +120,15 @@ For managing a single account:
 
 ### Partner (Partner Only)
 
-| Operation             | Description                              |
-| --------------------- | ---------------------------------------- |
-| **Get Billing Usage** | Monthly usage report for billing         |
-| **Get Many Admins**   | List all partner administrators          |
-| **Get Many Roles**    | List available roles and permission sets |
+| Operation                  | Description                              |
+| -------------------------- | ---------------------------------------- |
+| **Create Admin**           | Create a new partner administrator       |
+| **Delete Role Assignment** | Remove a role assignment from an admin   |
+| **Get Admin**              | Get a specific partner administrator     |
+| **Get Billing Usage**      | Monthly usage report for billing         |
+| **Get Many Admins**        | List all partner administrators          |
+| **Get Many Roles**         | List available roles and permission sets |
+| **Get Role Assignments**   | Get all role assignments for an admin    |
 
 ---
 
