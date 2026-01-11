@@ -1215,22 +1215,6 @@ json: true,
 		}
 	}
 
-			} catch (error) {
-				if (this.continueOnFail()) {
-					returnData.push({
-						json: { error: (error as Error).message },
-						pairedItem: { item: i },
-					});
-					continue;
-				}
-				throw error;
-			}
-		}
-
-		return [returnData];
-	}
-}
-
 			if (resource === 'partner') {
 				// Get auth context for Partner API
 				const credentials = (await this.getCredentials(
@@ -1379,3 +1363,20 @@ json: true,
 					}
 				}
 			}
+
+			} catch (error) {
+				if (this.continueOnFail()) {
+					returnData.push({
+						json: { error: (error as Error).message },
+						pairedItem: { item: i },
+					});
+					continue;
+				}
+				throw error;
+			}
+		}
+
+		return [returnData];
+	}
+}
+
