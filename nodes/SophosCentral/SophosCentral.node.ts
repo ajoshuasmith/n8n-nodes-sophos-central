@@ -98,6 +98,11 @@ name: 'Organization',
 value: 'organization',
 				description: 'Manage tenant organizations (Partner accounts only)',
 },
+					{
+						name: 'Partner',
+						value: 'partner',
+						description: 'Partner-level operations (Partner accounts only)',
+					},
 				],
 				default: 'firewall',
 			},
@@ -108,7 +113,7 @@ value: 'organization',
 		default: '',
 		displayOptions: {
 			show: {
-				resource: ['organization'],
+				resource: ['organization', 'partner'],
 			},
 		},
 		description: 'Organization operations require Partner API credentials. Verify your credentials are configured for Partner (Multi-Tenant) account type.',
@@ -1126,7 +1131,7 @@ if (operation === 'create') {
 method: 'POST',
 url: 'https://api.central.sophos.com/partner/v1/tenants',
 headers: {
-Authorization: \`Bearer \${ctx.token}\`,
+Authorization: `Bearer ${ctx.token}`,
 'X-Partner-ID': ctx.partnerId as string,
 'Content-Type': 'application/json',
 },
@@ -1145,9 +1150,9 @@ json: true,
 
 			const responseData = await this.helpers.httpRequest({
 method: 'GET',
-url: \`https://api.central.sophos.com/partner/v1/tenants/\${tenantId}\`,
+url: `https://api.central.sophos.com/partner/v1/tenants/${tenantId}`,
 headers: {
-Authorization: \`Bearer \${ctx.token}\`,
+Authorization: `Bearer ${ctx.token}`,
 'X-Partner-ID': ctx.partnerId as string,
 },
 json: true,
@@ -1175,7 +1180,7 @@ json: true,
 method: 'GET',
 url: 'https://api.central.sophos.com/partner/v1/tenants',
 headers: {
-Authorization: \`Bearer \${ctx.token}\`,
+Authorization: `Bearer ${ctx.token}`,
 'X-Partner-ID': ctx.partnerId as string,
 },
 qs: { page, pageSize, pageTotal: true },
@@ -1195,7 +1200,7 @@ json: true,
 method: 'GET',
 url: 'https://api.central.sophos.com/partner/v1/tenants',
 headers: {
-Authorization: \`Bearer \${ctx.token}\`,
+Authorization: `Bearer ${ctx.token}`,
 'X-Partner-ID': ctx.partnerId as string,
 },
 qs: { page: 1, pageSize: limit, pageTotal: false },
@@ -1225,3 +1230,152 @@ json: true,
 		return [returnData];
 	}
 }
+
+			if (resource === 'partner') {
+				// Get auth context for Partner API
+				const credentials = (await this.getCredentials(
+'sophosCentralApi',
+)) as unknown as ISophosCentralCredentials;
+				const ctx = await getAuthContext.call(this, credentials);
+
+				if (operation === 'getBillingUsage') {
+					const year = this.getNodeParameter('year', i) as number;
+					const month = this.getNodeParameter('month', i) as number;
+					const additionalOptions = this.getNodeParameter('additionalOptions', i, {}) as IDataObject;
+
+					let url = `https://api.central.sophos.com/partner/v1/billing/usage/${year}/${month}`;
+					const qs: IDataObject = {};
+
+					if (additionalOptions.tenantId) {
+						qs.tenantId = additionalOptions.tenantId;
+					}
+
+					const responseData = await this.helpers.httpRequest({
+method: 'GET',
+url,
+headers: {
+Authorization: `Bearer ${ctx.token}`,
+'X-Partner-ID': ctx.partnerId as string,
+},
+qs,
+json: true,
+});
+					returnData.push({ json: responseData, pairedItem: { item: i } });
+				}
+
+				if (operation === 'getAllAdmins') {
+					const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+					let responseItems: IDataObject[];
+
+					if (returnAll) {
+						// Paginate through all results
+						responseItems = [];
+						let page = 1;
+						const pageSize = 100;
+						let totalPages = 1;
+
+						do {
+							const response = (await this.helpers.httpRequest({
+method: 'GET',
+url: 'https://api.central.sophos.com/partner/v1/admins',
+headers: {
+Authorization: `Bearer ${ctx.token}`,
+'X-Partner-ID': ctx.partnerId as string,
+},
+qs: {
+page,
+pageSize,
+pageTotal: true,
+},
+json: true,
+})) as IDataObject;
+
+							const items = (response.items as IDataObject[]) || [];
+							responseItems.push(...items);
+
+							const pages = response.pages as IDataObject | undefined;
+							totalPages = typeof pages?.total === 'number' ? (pages.total as number) : page;
+							page += 1;
+						} while (page <= totalPages);
+					} else {
+						const limit = this.getNodeParameter('limit', i) as number;
+						const response = (await this.helpers.httpRequest({
+method: 'GET',
+url: 'https://api.central.sophos.com/partner/v1/admins',
+headers: {
+Authorization: `Bearer ${ctx.token}`,
+'X-Partner-ID': ctx.partnerId as string,
+},
+qs: {
+page: 1,
+pageSize: limit,
+pageTotal: false,
+},
+json: true,
+})) as IDataObject;
+						responseItems = (response.items as IDataObject[]) || [];
+					}
+
+					for (const item of responseItems) {
+						returnData.push({ json: item, pairedItem: { item: i } });
+					}
+				}
+
+				if (operation === 'getAllRoles') {
+					const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+					let responseItems: IDataObject[];
+
+					if (returnAll) {
+						// Paginate through all results
+						responseItems = [];
+						let page = 1;
+						const pageSize = 100;
+						let totalPages = 1;
+
+						do {
+							const response = (await this.helpers.httpRequest({
+method: 'GET',
+url: 'https://api.central.sophos.com/partner/v1/roles',
+headers: {
+Authorization: `Bearer ${ctx.token}`,
+'X-Partner-ID': ctx.partnerId as string,
+},
+qs: {
+page,
+pageSize,
+pageTotal: true,
+},
+json: true,
+})) as IDataObject;
+
+							const items = (response.items as IDataObject[]) || [];
+							responseItems.push(...items);
+
+							const pages = response.pages as IDataObject | undefined;
+							totalPages = typeof pages?.total === 'number' ? (pages.total as number) : page;
+							page += 1;
+						} while (page <= totalPages);
+					} else {
+						const limit = this.getNodeParameter('limit', i) as number;
+						const response = (await this.helpers.httpRequest({
+method: 'GET',
+url: 'https://api.central.sophos.com/partner/v1/roles',
+headers: {
+Authorization: `Bearer ${ctx.token}`,
+'X-Partner-ID': ctx.partnerId as string,
+},
+qs: {
+page: 1,
+pageSize: limit,
+pageTotal: false,
+},
+json: true,
+})) as IDataObject;
+						responseItems = (response.items as IDataObject[]) || [];
+					}
+
+					for (const item of responseItems) {
+						returnData.push({ json: item, pairedItem: { item: i } });
+					}
+				}
+			}
