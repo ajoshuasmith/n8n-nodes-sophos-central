@@ -15,7 +15,7 @@ export const partnerOperations: INodeProperties[] = [
 			{
 				name: 'Get Billing Usage',
 				value: 'getBillingUsage',
-				description: 'Get monthly billing usage report',
+				description: 'Get monthly billing usage report for all tenants',
 				action: 'Get billing usage',
 			},
 			{
@@ -27,7 +27,7 @@ export const partnerOperations: INodeProperties[] = [
 			{
 				name: 'Get Many Roles',
 				value: 'getAllRoles',
-				description: 'Get all available partner roles',
+				description: 'Get all available partner roles and permissions',
 				action: 'Get many roles',
 			},
 		],
@@ -36,6 +36,19 @@ export const partnerOperations: INodeProperties[] = [
 ];
 
 export const partnerFields: INodeProperties[] = [
+	// Partner Notice
+	{
+		displayName: 'Partner Account Required',
+		name: 'partnerNotice',
+		type: 'notice',
+		default: '',
+		displayOptions: {
+			show: {
+				resource: ['partner'],
+			},
+		},
+		description: 'Partner operations require Partner API credentials configured in your Sophos Central credentials.',
+	},
 	// Billing Usage Fields
 	{
 		displayName: 'Year',
@@ -48,7 +61,7 @@ export const partnerFields: INodeProperties[] = [
 				operation: ['getBillingUsage'],
 			},
 		},
-		default: new Date().getFullYear(),
+		default: '={{ new Date().getFullYear() }}',
 		description: 'Year for billing report (e.g., 2026)',
 		typeOptions: {
 			minValue: 2020,
@@ -58,7 +71,7 @@ export const partnerFields: INodeProperties[] = [
 	{
 		displayName: 'Month',
 		name: 'month',
-		type: 'number',
+		type: 'options',
 		required: true,
 		displayOptions: {
 			show: {
@@ -66,18 +79,28 @@ export const partnerFields: INodeProperties[] = [
 				operation: ['getBillingUsage'],
 			},
 		},
-		default: new Date().getMonth() + 1,
-		description: 'Month for billing report (1-12)',
-		typeOptions: {
-			minValue: 1,
-			maxValue: 12,
-		},
+		options: [
+			{ name: 'January', value: 1 },
+			{ name: 'February', value: 2 },
+			{ name: 'March', value: 3 },
+			{ name: 'April', value: 4 },
+			{ name: 'May', value: 5 },
+			{ name: 'June', value: 6 },
+			{ name: 'July', value: 7 },
+			{ name: 'August', value: 8 },
+			{ name: 'September', value: 9 },
+			{ name: 'October', value: 10 },
+			{ name: 'November', value: 11 },
+			{ name: 'December', value: 12 },
+		],
+		default: 1,
+		description: 'Month for billing report',
 	},
 	{
-		displayName: 'Additional Options',
-		name: 'additionalOptions',
+		displayName: 'Filters',
+		name: 'billingFilters',
 		type: 'collection',
-		placeholder: 'Add Option',
+		placeholder: 'Add Filter',
 		default: {},
 		displayOptions: {
 			show: {
@@ -91,11 +114,12 @@ export const partnerFields: INodeProperties[] = [
 				name: 'tenantId',
 				type: 'string',
 				default: '',
+				placeholder: 'e.g. a1b2c3d4-e5f6-7890-abcd-ef1234567890',
 				description: 'Filter billing report for a specific tenant',
 			},
 		],
 	},
-	// Admin Management Fields
+	// Admin List Fields
 	{
 		displayName: 'Return All',
 		name: 'returnAll',
@@ -103,7 +127,7 @@ export const partnerFields: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['partner'],
-				operation: ['getAllAdmins'],
+				operation: ['getAllAdmins', 'getAllRoles'],
 			},
 		},
 		default: false,
@@ -116,39 +140,7 @@ export const partnerFields: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['partner'],
-				operation: ['getAllAdmins'],
-				returnAll: [false],
-			},
-		},
-		typeOptions: {
-			minValue: 1,
-			maxValue: 1000,
-		},
-		default: 50,
-		description: 'Max number of results to return',
-	},
-	// Roles Fields
-	{
-		displayName: 'Return All',
-		name: 'returnAll',
-		type: 'boolean',
-		displayOptions: {
-			show: {
-				resource: ['partner'],
-				operation: ['getAllRoles'],
-			},
-		},
-		default: false,
-		description: 'Whether to return all results or only up to a given limit',
-	},
-	{
-		displayName: 'Limit',
-		name: 'limit',
-		type: 'number',
-		displayOptions: {
-			show: {
-				resource: ['partner'],
-				operation: ['getAllRoles'],
+				operation: ['getAllAdmins', 'getAllRoles'],
 				returnAll: [false],
 			},
 		},

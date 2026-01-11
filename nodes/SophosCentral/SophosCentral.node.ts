@@ -11,6 +11,7 @@ import type {
 import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
 import {
+	getAuthContext,
 	getAllTenantsFirewalls,
 	getTenantList,
 	resolveTenantId,
@@ -96,28 +97,15 @@ export class SophosCentral implements INodeType {
 {
 name: 'Organization',
 value: 'organization',
-				description: 'Manage tenant organizations (Partner accounts only)',
 },
 					{
 						name: 'Partner',
 						value: 'partner',
-						description: 'Partner-level operations (Partner accounts only)',
+						description: 'Partner billing, admins, and roles (Partner accounts only)',
 					},
 				],
 				default: 'firewall',
 			},
-	{
-		displayName: 'Partner Account Required',
-		name: 'partnerNotice',
-		type: 'notice',
-		default: '',
-		displayOptions: {
-			show: {
-				resource: ['organization', 'partner'],
-			},
-		},
-		description: 'Organization operations require Partner API credentials. Verify your credentials are configured for Partner (Multi-Tenant) account type.',
-	},
 			...operationFields,
 			...resourceFields,
 		],
@@ -412,13 +400,13 @@ value: 'organization',
 
 		for (let i = 0; i < items.length; i++) {
 			try {
-				// Organization resource doesn't use tenant context parameter
-				const tenantIdRaw = resource === 'organization' ? undefined : getResourceLocatorValue(
+				// Organization and Partner resources don't use tenant context parameter
+				const tenantIdRaw = (resource === 'organization' || resource === 'partner') ? undefined : getResourceLocatorValue(
 					this.getNodeParameter('tenantId', i) as unknown,
 				);
 				
 				let tenantId: string | undefined;
-				if (resource !== 'organization') {
+				if (resource !== 'organization' && resource !== 'partner') {
 					try {
 						tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
 					} catch (error) {
@@ -1067,183 +1055,138 @@ if (resource === 'organization') {
 const baseUrl = '/partner/v1/tenants';
 
 if (operation === 'create') {
-	if (resource === 'organization') {
-		const baseUrl = '/partner/v1/tenants';
+const name = this.getNodeParameter('name', i) as string;
+const dataGeography = this.getNodeParameter('dataGeography', i) as string;
+const billingType = this.getNodeParameter('billingType', i) as string;
+const contactFirstName = this.getNodeParameter('contactFirstName', i) as string;
+const contactLastName = this.getNodeParameter('contactLastName', i) as string;
+const contactEmail = this.getNodeParameter('contactEmail', i) as string;
+const contactPhone = this.getNodeParameter('contactPhone', i) as string;
+const addressLine1 = this.getNodeParameter('addressLine1', i) as string;
+const city = this.getNodeParameter('city', i) as string;
+const countryCode = this.getNodeParameter('countryCode', i) as string;
+const postalCode = this.getNodeParameter('postalCode', i) as string;
+const additionalFields = this.getNodeParameter('additionalFields', i, {}) as IDataObject;
 
-		if (operation === 'create') {
-			const name = this.getNodeParameter('name', i) as string;
-			const dataGeography = this.getNodeParameter('dataGeography', i) as string;
-			const billingType = this.getNodeParameter('billingType', i) as string;
-			const contactFirstName = this.getNodeParameter('contactFirstName', i) as string;
-			const contactLastName = this.getNodeParameter('contactLastName', i) as string;
-			const contactEmail = this.getNodeParameter('contactEmail', i) as string;
-			const contactPhone = this.getNodeParameter('contactPhone', i) as string;
-			const addressLine1 = this.getNodeParameter('addressLine1', i) as string;
-			const city = this.getNodeParameter('city', i) as string;
-			const countryCode = this.getNodeParameter('countryCode', i) as string;
-			const postalCode = this.getNodeParameter('postalCode', i) as string;
-			const additionalFields = this.getNodeParameter('additionalFields', i, {}) as IDataObject;
-
-			const body: IDataObject = {
-				name,
-				dataGeography,
-				billingType,
-				contact: {
-					firstName: contactFirstName,
-					lastName: contactLastName,
-					email: contactEmail,
-					phone: contactPhone,
-					address: {
-						address1: addressLine1,
-						city,
-						countryCode,
-						postalCode,
-					},
-				},
-			};
-
-			if (additionalFields.showAs) body.showAs = additionalFields.showAs;
-			if (additionalFields.addressLine2) {
-				const contact = body.contact as IDataObject;
-				const address = contact.address as IDataObject;
-				contact.address = {
-					...address,
-					address2: additionalFields.addressLine2,
-				};
-			}
-			if (additionalFields.state) {
-				const contact = body.contact as IDataObject;
-				const address = contact.address as IDataObject;
-				contact.address = {
-					...address,
-					state: additionalFields.state,
-				};
-			}
-
-			// Get auth context for Partner API
-			const credentials = (await this.getCredentials(
-'sophosCentralApi',
-)) as unknown as ISophosCentralCredentials;
-			const ctx = await getAuthContext.call(this, credentials);
-
-			// Partner API call
-			const responseData = await this.helpers.httpRequest({
-method: 'POST',
-url: 'https://api.central.sophos.com/partner/v1/tenants',
-headers: {
-Authorization: `Bearer ${ctx.token}`,
-'X-Partner-ID': ctx.partnerId as string,
-'Content-Type': 'application/json',
+const body: IDataObject = {
+name,
+dataGeography,
+billingType,
+contact: {
+firstName: contactFirstName,
+lastName: contactLastName,
+email: contactEmail,
+phone: contactPhone,
+address: {
+address1: addressLine1,
+city,
+countryCode,
+postalCode,
 },
+},
+};
+
+if (additionalFields.showAs) body.showAs = additionalFields.showAs;
+if (additionalFields.addressLine2) {
+const contact = body.contact as IDataObject;
+const address = contact.address as IDataObject;
+contact.address = {
+...address,
+address2: additionalFields.addressLine2,
+};
+}
+if (additionalFields.state) {
+const contact = body.contact as IDataObject;
+const address = contact.address as IDataObject;
+contact.address = {
+...address,
+state: additionalFields.state,
+};
+}
+
+const responseData = await sophosCentralApiRequest.call(
+this,
+'POST',
+baseUrl,
 body,
-json: true,
-});
-			returnData.push({ json: responseData, pairedItem: { item: i } });
-		}
+{},
+undefined,
+);
+returnData.push({ json: responseData, pairedItem: { item: i } });
+}
 
-		if (operation === 'get') {
-			const tenantId = this.getNodeParameter('tenantId', i) as string;
-			const credentials = (await this.getCredentials(
-'sophosCentralApi',
-)) as unknown as ISophosCentralCredentials;
-			const ctx = await getAuthContext.call(this, credentials);
+if (operation === 'get') {
+const tenantId = this.getNodeParameter('tenantId', i) as string;
+const responseData = await sophosCentralApiRequest.call(
+this,
+'GET',
+`${baseUrl}/${tenantId}`,
+{},
+{},
+undefined,
+);
+returnData.push({ json: responseData, pairedItem: { item: i } });
+}
 
-			const responseData = await this.helpers.httpRequest({
-method: 'GET',
-url: `https://api.central.sophos.com/partner/v1/tenants/${tenantId}`,
-headers: {
-Authorization: `Bearer ${ctx.token}`,
-'X-Partner-ID': ctx.partnerId as string,
-},
-json: true,
-});
-			returnData.push({ json: responseData, pairedItem: { item: i } });
-		}
+if (operation === 'getAll') {
+const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+let responseItems: IDataObject[];
 
-		if (operation === 'getAll') {
-			const returnAll = this.getNodeParameter('returnAll', i) as boolean;
-			const credentials = (await this.getCredentials(
-'sophosCentralApi',
-)) as unknown as ISophosCentralCredentials;
-			const ctx = await getAuthContext.call(this, credentials);
+if (returnAll) {
+responseItems = await sophosCentralApiRequestAllItems.call(
+this,
+'GET',
+baseUrl,
+{},
+{},
+undefined,
+);
+} else {
+const limit = this.getNodeParameter('limit', i) as number;
+const response = await sophosCentralApiRequest.call(
+this,
+'GET',
+baseUrl,
+{},
+{ page: 1, pageSize: limit, pageTotal: false },
+undefined,
+);
+responseItems = (response as IListResponse<IDataObject>).items || [];
+}
 
-			let responseItems: IDataObject[];
-
-			if (returnAll) {
-				responseItems = [];
-				let page = 1;
-				const pageSize = 100;
-				let totalPages = 1;
-
-				do {
-					const response = (await this.helpers.httpRequest({
-method: 'GET',
-url: 'https://api.central.sophos.com/partner/v1/tenants',
-headers: {
-Authorization: `Bearer ${ctx.token}`,
-'X-Partner-ID': ctx.partnerId as string,
-},
-qs: { page, pageSize, pageTotal: true },
-json: true,
-})) as IDataObject;
-
-					const items = (response.items as IDataObject[]) || [];
-					responseItems.push(...items);
-
-					const pages = response.pages as IDataObject | undefined;
-					totalPages = typeof pages?.total === 'number' ? (pages.total as number) : page;
-					page += 1;
-				} while (page <= totalPages);
-			} else {
-				const limit = this.getNodeParameter('limit', i) as number;
-				const response = (await this.helpers.httpRequest({
-method: 'GET',
-url: 'https://api.central.sophos.com/partner/v1/tenants',
-headers: {
-Authorization: `Bearer ${ctx.token}`,
-'X-Partner-ID': ctx.partnerId as string,
-},
-qs: { page: 1, pageSize: limit, pageTotal: false },
-json: true,
-})) as IDataObject;
-				responseItems = (response.items as IDataObject[]) || [];
-			}
-
-			for (const item of responseItems) {
-				returnData.push({ json: item, pairedItem: { item: i } });
-			}
-		}
-	}
+for (const item of responseItems) {
+returnData.push({ json: item, pairedItem: { item: i } });
+}
+}
+}
 
 			if (resource === 'partner') {
 				// Get auth context for Partner API
 				const credentials = (await this.getCredentials(
-'sophosCentralApi',
-)) as unknown as ISophosCentralCredentials;
+					'sophosCentralApi',
+				)) as unknown as ISophosCentralCredentials;
 				const ctx = await getAuthContext.call(this, credentials);
 
 				if (operation === 'getBillingUsage') {
 					const year = this.getNodeParameter('year', i) as number;
 					const month = this.getNodeParameter('month', i) as number;
-					const additionalOptions = this.getNodeParameter('additionalOptions', i, {}) as IDataObject;
+					const billingFilters = this.getNodeParameter('billingFilters', i, {}) as IDataObject;
 
-					let url = `https://api.central.sophos.com/partner/v1/billing/usage/${year}/${month}`;
 					const qs: IDataObject = {};
-
-					if (additionalOptions.tenantId) {
-						qs.tenantId = additionalOptions.tenantId;
+					if (billingFilters.tenantId) {
+						qs.tenantId = billingFilters.tenantId;
 					}
 
 					const responseData = await this.helpers.httpRequest({
-method: 'GET',
-url,
-headers: {
-Authorization: `Bearer ${ctx.token}`,
-'X-Partner-ID': ctx.partnerId as string,
-},
-qs,
-json: true,
-});
+						method: 'GET',
+						url: `https://api.central.sophos.com/partner/v1/billing/usage/${year}/${month}`,
+						headers: {
+							Authorization: `Bearer ${ctx.token}`,
+							'X-Partner-ID': ctx.partnerId as string,
+						},
+						qs,
+						json: true,
+					});
 					returnData.push({ json: responseData, pairedItem: { item: i } });
 				}
 
@@ -1252,7 +1195,6 @@ json: true,
 					let responseItems: IDataObject[];
 
 					if (returnAll) {
-						// Paginate through all results
 						responseItems = [];
 						let page = 1;
 						const pageSize = 100;
@@ -1260,19 +1202,15 @@ json: true,
 
 						do {
 							const response = (await this.helpers.httpRequest({
-method: 'GET',
-url: 'https://api.central.sophos.com/partner/v1/admins',
-headers: {
-Authorization: `Bearer ${ctx.token}`,
-'X-Partner-ID': ctx.partnerId as string,
-},
-qs: {
-page,
-pageSize,
-pageTotal: true,
-},
-json: true,
-})) as IDataObject;
+								method: 'GET',
+								url: 'https://api.central.sophos.com/partner/v1/admins',
+								headers: {
+									Authorization: `Bearer ${ctx.token}`,
+									'X-Partner-ID': ctx.partnerId as string,
+								},
+								qs: { page, pageSize, pageTotal: true },
+								json: true,
+							})) as IDataObject;
 
 							const items = (response.items as IDataObject[]) || [];
 							responseItems.push(...items);
@@ -1284,19 +1222,15 @@ json: true,
 					} else {
 						const limit = this.getNodeParameter('limit', i) as number;
 						const response = (await this.helpers.httpRequest({
-method: 'GET',
-url: 'https://api.central.sophos.com/partner/v1/admins',
-headers: {
-Authorization: `Bearer ${ctx.token}`,
-'X-Partner-ID': ctx.partnerId as string,
-},
-qs: {
-page: 1,
-pageSize: limit,
-pageTotal: false,
-},
-json: true,
-})) as IDataObject;
+							method: 'GET',
+							url: 'https://api.central.sophos.com/partner/v1/admins',
+							headers: {
+								Authorization: `Bearer ${ctx.token}`,
+								'X-Partner-ID': ctx.partnerId as string,
+							},
+							qs: { page: 1, pageSize: limit, pageTotal: false },
+							json: true,
+						})) as IDataObject;
 						responseItems = (response.items as IDataObject[]) || [];
 					}
 
@@ -1310,7 +1244,6 @@ json: true,
 					let responseItems: IDataObject[];
 
 					if (returnAll) {
-						// Paginate through all results
 						responseItems = [];
 						let page = 1;
 						const pageSize = 100;
@@ -1318,19 +1251,15 @@ json: true,
 
 						do {
 							const response = (await this.helpers.httpRequest({
-method: 'GET',
-url: 'https://api.central.sophos.com/partner/v1/roles',
-headers: {
-Authorization: `Bearer ${ctx.token}`,
-'X-Partner-ID': ctx.partnerId as string,
-},
-qs: {
-page,
-pageSize,
-pageTotal: true,
-},
-json: true,
-})) as IDataObject;
+								method: 'GET',
+								url: 'https://api.central.sophos.com/partner/v1/roles',
+								headers: {
+									Authorization: `Bearer ${ctx.token}`,
+									'X-Partner-ID': ctx.partnerId as string,
+								},
+								qs: { page, pageSize, pageTotal: true },
+								json: true,
+							})) as IDataObject;
 
 							const items = (response.items as IDataObject[]) || [];
 							responseItems.push(...items);
@@ -1342,19 +1271,15 @@ json: true,
 					} else {
 						const limit = this.getNodeParameter('limit', i) as number;
 						const response = (await this.helpers.httpRequest({
-method: 'GET',
-url: 'https://api.central.sophos.com/partner/v1/roles',
-headers: {
-Authorization: `Bearer ${ctx.token}`,
-'X-Partner-ID': ctx.partnerId as string,
-},
-qs: {
-page: 1,
-pageSize: limit,
-pageTotal: false,
-},
-json: true,
-})) as IDataObject;
+							method: 'GET',
+							url: 'https://api.central.sophos.com/partner/v1/roles',
+							headers: {
+								Authorization: `Bearer ${ctx.token}`,
+								'X-Partner-ID': ctx.partnerId as string,
+							},
+							qs: { page: 1, pageSize: limit, pageTotal: false },
+							json: true,
+						})) as IDataObject;
 						responseItems = (response.items as IDataObject[]) || [];
 					}
 
@@ -1379,4 +1304,3 @@ json: true,
 		return [returnData];
 	}
 }
-
