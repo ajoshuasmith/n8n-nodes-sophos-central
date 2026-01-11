@@ -394,16 +394,19 @@ value: 'organization',
 
 		for (let i = 0; i < items.length; i++) {
 			try {
-				const tenantIdRaw = getResourceLocatorValue(
+				// Organization resource doesn't use tenant context parameter
+				const tenantIdRaw = resource === 'organization' ? undefined : getResourceLocatorValue(
 					this.getNodeParameter('tenantId', i) as unknown,
 				);
 				
 				let tenantId: string | undefined;
-				try {
-					tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
-				} catch (error) {
-					// Fallthrough: tenantId remains undefined for "All Tenants" mode (Partner)
-					// Individual operations will validate if they strictly require a tenantId
+				if (resource !== 'organization') {
+					try {
+						tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
+					} catch (error) {
+						// Fallthrough: tenantId remains undefined for "All Tenants" mode (Partner)
+						// Individual operations will validate if they strictly require a tenantId
+					}
 				}
 
 				if (resource === 'firewall') {
