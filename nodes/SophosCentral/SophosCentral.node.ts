@@ -94,10 +94,10 @@ export class SophosCentral implements INodeType {
 						name: 'Health',
 						value: 'health',
 					},
-{
-name: 'Organization',
-value: 'organization',
-},
+					{
+						name: 'Organization',
+						value: 'organization',
+					},
 					{
 						name: 'Partner',
 						value: 'partner',
@@ -346,7 +346,7 @@ value: 'organization',
 				try {
 					const qs: IDataObject = { page, pageSize: 100, pageTotal: true };
 					qs.sort = 'createdAt:desc';
-					
+
 					response = await sophosCentralApiRequest.call(
 						this,
 						'GET',
@@ -364,10 +364,15 @@ value: 'organization',
 				const normalizedFilter = filter?.toLowerCase();
 
 				const filtered = normalizedFilter
-					? items.filter((a) => 
-						String(a.description || '').toLowerCase().includes(normalizedFilter) ||
-						String(a.type || '').toLowerCase().includes(normalizedFilter)
-					)
+					? items.filter(
+							(a) =>
+								String(a.description || '')
+									.toLowerCase()
+									.includes(normalizedFilter) ||
+								String(a.type || '')
+									.toLowerCase()
+									.includes(normalizedFilter),
+						)
 					: items;
 
 				const totalPages =
@@ -378,11 +383,14 @@ value: 'organization',
 					results: filtered.map((alert) => {
 						const actions = Array.isArray(alert.allowedActions) ? alert.allowedActions : [];
 						const actionTag = actions.length > 0 ? '[Actionable]' : '[Info Only]';
-						const baseName = (alert.description as string) || (alert.type as string) || (alert.id as string);
+						const baseName =
+							(alert.description as string) || (alert.type as string) || (alert.id as string);
 						return {
 							name: `${actionTag} ${baseName}`,
 							value: alert.id as string,
-							description: alert.severity ? `Severity: ${alert.severity} | Actions: ${actions.join(', ') || 'None'}` : undefined,
+							description: alert.severity
+								? `Severity: ${alert.severity} | Actions: ${actions.join(', ') || 'None'}`
+								: undefined,
 						};
 					}),
 					paginationToken: nextToken,
@@ -401,10 +409,11 @@ value: 'organization',
 		for (let i = 0; i < items.length; i++) {
 			try {
 				// Organization and Partner resources don't use tenant context parameter
-				const tenantIdRaw = (resource === 'organization' || resource === 'partner') ? undefined : getResourceLocatorValue(
-					this.getNodeParameter('tenantId', i) as unknown,
-				);
-				
+				const tenantIdRaw =
+					resource === 'organization' || resource === 'partner'
+						? undefined
+						: getResourceLocatorValue(this.getNodeParameter('tenantId', i) as unknown);
+
 				let tenantId: string | undefined;
 				if (resource !== 'organization' && resource !== 'partner') {
 					try {
@@ -425,9 +434,9 @@ value: 'organization',
 							throw new NodeOperationError(this.getNode(), 'Firewall is required');
 						}
 
-						/* 
+						/*
 						 * Workaround for Partner API 404s:
-						 * Direct GET /firewalls/{id} often fails with 404 for Partner credentials 
+						 * Direct GET /firewalls/{id} often fails with 404 for Partner credentials
 						 * even when the firewall exists. We use the list endpoint with local filtering instead.
 						 */
 						const allFirewalls = await sophosCentralApiRequestAllItems.call(
@@ -442,55 +451,64 @@ value: 'organization',
 						const firewall = allFirewalls.find((f: IDataObject) => f.id === firewallId);
 
 						if (!firewall) {
-							throw new NodeApiError(this.getNode(), { message: 'Firewall not found in tenant' }, { httpCode: '404' });
+							throw new NodeApiError(
+								this.getNode(),
+								{ message: 'Firewall not found in tenant' },
+								{ httpCode: '404' },
+							);
 						}
 
 						returnData.push({ json: firewall, pairedItem: { item: i } });
 					}
 
 					if (operation === 'getAll') {
-					type FirewallFilters = { name?: string; serial?: string; firmwareVersion?: string };
+						type FirewallFilters = { name?: string; serial?: string; firmwareVersion?: string };
 
-					const returnAll = this.getNodeParameter('returnAll', i) as boolean;
-					const filters = this.getNodeParameter('filters', i, {}) as FirewallFilters;
+						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+						const filters = this.getNodeParameter('filters', i, {}) as FirewallFilters;
 
-					let responseItems: IDataObject[];
+						let responseItems: IDataObject[];
 
-					// Check if we should fetch from all tenants
-					if (!tenantId) {
-						const credentials = (await this.getCredentials(
-							'sophosCentralApi',
-						)) as unknown as ISophosCentralCredentials;
+						// Check if we should fetch from all tenants
+						if (!tenantId) {
+							const credentials = (await this.getCredentials(
+								'sophosCentralApi',
+							)) as unknown as ISophosCentralCredentials;
 
-						if (credentials.accountType !== 'partner') {
-							throw new NodeOperationError(
-								this.getNode(),
-								'Fetching firewalls from all tenants is only available for Partner accounts.',
+							if (credentials.accountType !== 'partner') {
+								throw new NodeOperationError(
+									this.getNode(),
+									'Fetching firewalls from all tenants is only available for Partner accounts.',
+								);
+							}
+
+							const limit = returnAll ? undefined : (this.getNodeParameter('limit', i) as number);
+							responseItems = await getAllTenantsFirewalls.call(
+								this,
+								credentials,
+								returnAll,
+								limit,
 							);
-						}
-
-						const limit = returnAll ? undefined : (this.getNodeParameter('limit', i) as number);
-						responseItems = await getAllTenantsFirewalls.call(this, credentials, returnAll, limit);
-					} else if (returnAll) {
-						responseItems = await sophosCentralApiRequestAllItems.call(
-							this,
-							'GET',
-							'/firewall/v1/firewalls',
-							{},
-							{},
-							tenantId,
-						);
-					} else {
-						const limit = this.getNodeParameter('limit', i) as number;
-						const response = await sophosCentralApiRequest.call(
-							this,
-							'GET',
-							'/firewall/v1/firewalls',
-							{},
-							{ page: 1, pageSize: limit, pageTotal: false },
-							tenantId,
-						);
-						responseItems = (response as IListResponse<IDataObject>).items || [];
+						} else if (returnAll) {
+							responseItems = await sophosCentralApiRequestAllItems.call(
+								this,
+								'GET',
+								'/firewall/v1/firewalls',
+								{},
+								{},
+								tenantId,
+							);
+						} else {
+							const limit = this.getNodeParameter('limit', i) as number;
+							const response = await sophosCentralApiRequest.call(
+								this,
+								'GET',
+								'/firewall/v1/firewalls',
+								{},
+								{ page: 1, pageSize: limit, pageTotal: false },
+								tenantId,
+							);
+							responseItems = (response as IListResponse<IDataObject>).items || [];
 						}
 
 						if (filters.name) {
@@ -533,7 +551,6 @@ value: 'organization',
 						firmwareVersions?: Array<{ version: string; size?: string }>;
 					};
 
-
 					if (operation === 'getCurrent' || operation === 'getUpgradeStatus') {
 						const firewallId = getResourceLocatorValue(
 							this.getNodeParameter('firewallId', i) as unknown,
@@ -556,7 +573,7 @@ value: 'organization',
 								tenantId,
 							);
 							returnData.push({ json: responseData, pairedItem: { item: i } });
-						} 
+						}
 						// Multi-tenant / All firewalls mode
 						else {
 							const credentials = (await this.getCredentials(
@@ -583,12 +600,12 @@ value: 'organization',
 									tenantId,
 								);
 								// Add tenantId to each for the next step
-								firewallsToCheck.forEach(f => f.tenantId = tenantId);
+								firewallsToCheck.forEach((f) => (f.tenantId = tenantId));
 							} else {
 								// Get all firewalls for all tenants
 								firewallsToCheck = await getAllTenantsFirewalls.call(this, credentials, true);
 								// getAllTenantsFirewalls adds .tenant object, we need flattened tenantId for next step
-								firewallsToCheck.forEach(f => f.tenantId = (f.tenant as ITenant).id);
+								firewallsToCheck.forEach((f) => (f.tenantId = (f.tenant as ITenant).id));
 							}
 
 							// Group by tenant because the check endpoint is per-tenant
@@ -613,17 +630,17 @@ value: 'organization',
 											{},
 											tid,
 										);
-										
+
 										// Process results to add tenant info back
 										const results = (response as FirmwareUpgradeCheckResponse).firewalls || [];
 										for (const result of results) {
 											// Match result to original firewall to get name/hostname if needed
-											const original = firewallsToCheck.find(f => f.id === (result as any).id); // API returns ID in result
+											const original = firewallsToCheck.find((f) => f.id === (result as any).id); // API returns ID in result
 											const combined = {
 												...result,
 												tenantId: tid,
 												firewallName: original?.name,
-												firewallHostname: original?.hostname
+												firewallHostname: original?.hostname,
 											};
 											returnData.push({ json: combined as IDataObject, pairedItem: { item: i } });
 										}
@@ -805,7 +822,7 @@ value: 'organization',
 							throw new NodeOperationError(this.getNode(), 'Firewall is required');
 						}
 
-						/* 
+						/*
 						 * Workaround for Partner API 404s:
 						 * Direct GET /firewalls/{id} often fails with 404 for Partner credentials.
 						 * We use the list endpoint with local filtering instead.
@@ -822,7 +839,11 @@ value: 'organization',
 						const firewall = allFirewalls.find((f: IDataObject) => f.id === firewallId);
 
 						if (!firewall) {
-							throw new NodeApiError(this.getNode(), { message: 'Firewall not found in tenant' }, { httpCode: '404' });
+							throw new NodeApiError(
+								this.getNode(),
+								{ message: 'Firewall not found in tenant' },
+								{ httpCode: '404' },
+							);
 						}
 
 						returnData.push({ json: firewall, pairedItem: { item: i } });
@@ -846,7 +867,12 @@ value: 'organization',
 							}
 
 							const limit = returnAll ? undefined : (this.getNodeParameter('limit', i) as number);
-							responseItems = await getAllTenantsFirewalls.call(this, credentials, returnAll, limit);
+							responseItems = await getAllTenantsFirewalls.call(
+								this,
+								credentials,
+								returnAll,
+								limit,
+							);
 						} else if (returnAll) {
 							responseItems = await sophosCentralApiRequestAllItems.call(
 								this,
@@ -927,7 +953,7 @@ value: 'organization',
 							this.getNodeParameter('firewallGroupId', i) as unknown,
 						);
 						// Endpoint: /firewall-groups/{groupId}/firewalls/sync-status
-						// Note: This often returns 202 Accepted + Location header for async status, 
+						// Note: This often returns 202 Accepted + Location header for async status,
 						// but simpler method gets immediate list if available.
 						// Checking documentation: The sync-status endpoint is synchronous for list.
 						const responseData = await sophosCentralApiRequest.call(
@@ -938,7 +964,7 @@ value: 'organization',
 							{},
 							tenantId,
 						);
-						
+
 						// The response items are firewalls with their sync status
 						const items = (responseData.items as IDataObject[]) || [];
 						for (const item of items) {
@@ -950,7 +976,7 @@ value: 'organization',
 				if (resource === 'alert') {
 					// Common API (Alerts)
 					const baseUrl = '/common/v1/alerts';
-					
+
 					if (operation === 'get') {
 						const alertId = this.getNodeParameter('alertId', i) as string;
 						const responseData = await sophosCentralApiRequest.call(
@@ -972,9 +998,12 @@ value: 'organization',
 							product?: string;
 							from?: string;
 						};
-						
+
 						const qs: IDataObject = {};
-						if (filters.severity) qs.severity = filters.severity; // array
+						// Sophos API expects severity as comma-separated string (e.g., "high,medium")
+						if (filters.severity && filters.severity.length > 0) {
+							qs.severity = filters.severity.join(',');
+						}
 						if (filters.product) qs.product = filters.product;
 						if (filters.from) qs.from = filters.from;
 
@@ -994,7 +1023,7 @@ value: 'organization',
 							qs.page = 1;
 							qs.pageSize = limit;
 							qs.pageTotal = false;
-							
+
 							const response = await sophosCentralApiRequest.call(
 								this,
 								'GET',
@@ -1033,9 +1062,12 @@ value: 'organization',
 							this.getNodeParameter('alertId', i) as unknown,
 						);
 						const action = this.getNodeParameter('action', i) as string;
-						
+
 						// Support comma-separated IDs for batch operations
-						const alertIds = alertIdsRaw.split(',').map((id) => id.trim()).filter((id) => id);
+						const alertIds = alertIdsRaw
+							.split(',')
+							.map((id) => id.trim())
+							.filter((id) => id);
 
 						for (const alertId of alertIds) {
 							const responseData = await sophosCentralApiRequest.call(
@@ -1051,96 +1083,120 @@ value: 'organization',
 					}
 				}
 
-if (resource === 'organization') {
-				// Get auth context for Partner API
-				const credentials = (await this.getCredentials(
-					'sophosCentralApi',
-				)) as unknown as ISophosCentralCredentials;
-				const ctx = await getAuthContext.call(this, credentials);
+				if (resource === 'organization') {
+					// Get auth context for Partner API
+					const credentials = (await this.getCredentials(
+						'sophosCentralApi',
+					)) as unknown as ISophosCentralCredentials;
+					const ctx = await getAuthContext.call(this, credentials);
 
-				if (operation === 'create') {
-					const name = this.getNodeParameter('name', i) as string;
-					const dataGeography = this.getNodeParameter('dataGeography', i) as string;
-					const billingType = this.getNodeParameter('billingType', i) as string;
-					const contactFirstName = this.getNodeParameter('contactFirstName', i) as string;
-					const contactLastName = this.getNodeParameter('contactLastName', i) as string;
-					const contactEmail = this.getNodeParameter('contactEmail', i) as string;
-					const contactPhone = this.getNodeParameter('contactPhone', i) as string;
-					const addressLine1 = this.getNodeParameter('addressLine1', i) as string;
-					const city = this.getNodeParameter('city', i) as string;
-					const countryCode = this.getNodeParameter('countryCode', i) as string;
-					const postalCode = this.getNodeParameter('postalCode', i) as string;
-					const additionalFields = this.getNodeParameter('additionalFields', i, {}) as IDataObject;
+					if (operation === 'create') {
+						const name = this.getNodeParameter('name', i) as string;
+						const dataGeography = this.getNodeParameter('dataGeography', i) as string;
+						const billingType = this.getNodeParameter('billingType', i) as string;
+						const contactFirstName = this.getNodeParameter('contactFirstName', i) as string;
+						const contactLastName = this.getNodeParameter('contactLastName', i) as string;
+						const contactEmail = this.getNodeParameter('contactEmail', i) as string;
+						const contactPhone = this.getNodeParameter('contactPhone', i) as string;
+						const addressLine1 = this.getNodeParameter('addressLine1', i) as string;
+						const city = this.getNodeParameter('city', i) as string;
+						const countryCode = this.getNodeParameter('countryCode', i) as string;
+						const postalCode = this.getNodeParameter('postalCode', i) as string;
+						const additionalFields = this.getNodeParameter(
+							'additionalFields',
+							i,
+							{},
+						) as IDataObject;
 
-					const body: IDataObject = {
-						name,
-						dataGeography,
-						billingType,
-						contact: {
-							firstName: contactFirstName,
-							lastName: contactLastName,
-							email: contactEmail,
-							phone: contactPhone,
-							address: {
-								address1: addressLine1,
-								city,
-								countryCode,
-								postalCode,
+						const body: IDataObject = {
+							name,
+							dataGeography,
+							billingType,
+							contact: {
+								firstName: contactFirstName,
+								lastName: contactLastName,
+								email: contactEmail,
+								phone: contactPhone,
+								address: {
+									address1: addressLine1,
+									city,
+									countryCode,
+									postalCode,
+								},
 							},
-						},
-					};
+						};
 
-					if (additionalFields.showAs) body.showAs = additionalFields.showAs;
-					if (additionalFields.addressLine2) {
-						const contact = body.contact as IDataObject;
-						const address = contact.address as IDataObject;
-						contact.address = { ...address, address2: additionalFields.addressLine2 };
+						if (additionalFields.showAs) body.showAs = additionalFields.showAs;
+						if (additionalFields.addressLine2) {
+							const contact = body.contact as IDataObject;
+							const address = contact.address as IDataObject;
+							contact.address = { ...address, address2: additionalFields.addressLine2 };
+						}
+						if (additionalFields.state) {
+							const contact = body.contact as IDataObject;
+							const address = contact.address as IDataObject;
+							contact.address = { ...address, state: additionalFields.state };
+						}
+
+						const responseData = await this.helpers.httpRequest({
+							method: 'POST',
+							url: 'https://api.central.sophos.com/partner/v1/tenants',
+							headers: {
+								Authorization: `Bearer ${ctx.token}`,
+								'X-Partner-ID': ctx.partnerId as string,
+								'Content-Type': 'application/json',
+							},
+							body,
+							json: true,
+						});
+						returnData.push({ json: responseData, pairedItem: { item: i } });
 					}
-					if (additionalFields.state) {
-						const contact = body.contact as IDataObject;
-						const address = contact.address as IDataObject;
-						contact.address = { ...address, state: additionalFields.state };
+
+					if (operation === 'get') {
+						const orgTenantId = this.getNodeParameter('tenantId', i) as string;
+						const responseData = await this.helpers.httpRequest({
+							method: 'GET',
+							url: `https://api.central.sophos.com/partner/v1/tenants/${orgTenantId}`,
+							headers: {
+								Authorization: `Bearer ${ctx.token}`,
+								'X-Partner-ID': ctx.partnerId as string,
+							},
+							json: true,
+						});
+						returnData.push({ json: responseData, pairedItem: { item: i } });
 					}
 
-					const responseData = await this.helpers.httpRequest({
-						method: 'POST',
-						url: 'https://api.central.sophos.com/partner/v1/tenants',
-						headers: {
-							Authorization: `Bearer ${ctx.token}`,
-							'X-Partner-ID': ctx.partnerId as string,
-							'Content-Type': 'application/json',
-						},
-						body,
-						json: true,
-					});
-					returnData.push({ json: responseData, pairedItem: { item: i } });
-				}
+					if (operation === 'getAll') {
+						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+						let responseItems: IDataObject[];
 
-				if (operation === 'get') {
-					const orgTenantId = this.getNodeParameter('tenantId', i) as string;
-					const responseData = await this.helpers.httpRequest({
-						method: 'GET',
-						url: `https://api.central.sophos.com/partner/v1/tenants/${orgTenantId}`,
-						headers: {
-							Authorization: `Bearer ${ctx.token}`,
-							'X-Partner-ID': ctx.partnerId as string,
-						},
-						json: true,
-					});
-					returnData.push({ json: responseData, pairedItem: { item: i } });
-				}
+						if (returnAll) {
+							responseItems = [];
+							let page = 1;
+							const pageSize = 100;
+							let totalPages = 1;
 
-				if (operation === 'getAll') {
-					const returnAll = this.getNodeParameter('returnAll', i) as boolean;
-					let responseItems: IDataObject[];
+							do {
+								const response = (await this.helpers.httpRequest({
+									method: 'GET',
+									url: 'https://api.central.sophos.com/partner/v1/tenants',
+									headers: {
+										Authorization: `Bearer ${ctx.token}`,
+										'X-Partner-ID': ctx.partnerId as string,
+									},
+									qs: { page, pageSize, pageTotal: true },
+									json: true,
+								})) as IDataObject;
 
-					if (returnAll) {
-						responseItems = [];
-						let page = 1;
-						const pageSize = 100;
-						let totalPages = 1;
+								const items = (response.items as IDataObject[]) || [];
+								responseItems.push(...items);
 
-						do {
+								const pages = response.pages as IDataObject | undefined;
+								totalPages = typeof pages?.total === 'number' ? (pages.total as number) : page;
+								page += 1;
+							} while (page <= totalPages);
+						} else {
+							const limit = this.getNodeParameter('limit', i) as number;
 							const response = (await this.helpers.httpRequest({
 								method: 'GET',
 								url: 'https://api.central.sophos.com/partner/v1/tenants',
@@ -1148,79 +1204,79 @@ if (resource === 'organization') {
 									Authorization: `Bearer ${ctx.token}`,
 									'X-Partner-ID': ctx.partnerId as string,
 								},
-								qs: { page, pageSize, pageTotal: true },
+								qs: { page: 1, pageSize: limit, pageTotal: false },
 								json: true,
 							})) as IDataObject;
+							responseItems = (response.items as IDataObject[]) || [];
+						}
 
-							const items = (response.items as IDataObject[]) || [];
-							responseItems.push(...items);
+						for (const item of responseItems) {
+							returnData.push({ json: item, pairedItem: { item: i } });
+						}
+					}
+				}
 
-							const pages = response.pages as IDataObject | undefined;
-							totalPages = typeof pages?.total === 'number' ? (pages.total as number) : page;
-							page += 1;
-						} while (page <= totalPages);
-					} else {
-						const limit = this.getNodeParameter('limit', i) as number;
-						const response = (await this.helpers.httpRequest({
+				if (resource === 'partner') {
+					// Get auth context for Partner API
+					const credentials = (await this.getCredentials(
+						'sophosCentralApi',
+					)) as unknown as ISophosCentralCredentials;
+					const ctx = await getAuthContext.call(this, credentials);
+
+					if (operation === 'getBillingUsage') {
+						const year = this.getNodeParameter('year', i) as number;
+						const month = this.getNodeParameter('month', i) as number;
+						const billingFilters = this.getNodeParameter('billingFilters', i, {}) as IDataObject;
+
+						const qs: IDataObject = {};
+						if (billingFilters.tenantId) {
+							qs.tenantId = billingFilters.tenantId;
+						}
+
+						const responseData = await this.helpers.httpRequest({
 							method: 'GET',
-							url: 'https://api.central.sophos.com/partner/v1/tenants',
+							url: `https://api.central.sophos.com/partner/v1/billing/usage/${year}/${month}`,
 							headers: {
 								Authorization: `Bearer ${ctx.token}`,
 								'X-Partner-ID': ctx.partnerId as string,
 							},
-							qs: { page: 1, pageSize: limit, pageTotal: false },
+							qs,
 							json: true,
-						})) as IDataObject;
-						responseItems = (response.items as IDataObject[]) || [];
+						});
+						returnData.push({ json: responseData, pairedItem: { item: i } });
 					}
 
-					for (const item of responseItems) {
-						returnData.push({ json: item, pairedItem: { item: i } });
-					}
-				}
-			}
+					if (operation === 'getAllAdmins') {
+						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+						let responseItems: IDataObject[];
 
-			if (resource === 'partner') {
-				// Get auth context for Partner API
-				const credentials = (await this.getCredentials(
-					'sophosCentralApi',
-				)) as unknown as ISophosCentralCredentials;
-				const ctx = await getAuthContext.call(this, credentials);
+						if (returnAll) {
+							responseItems = [];
+							let page = 1;
+							const pageSize = 100;
+							let totalPages = 1;
 
-				if (operation === 'getBillingUsage') {
-					const year = this.getNodeParameter('year', i) as number;
-					const month = this.getNodeParameter('month', i) as number;
-					const billingFilters = this.getNodeParameter('billingFilters', i, {}) as IDataObject;
+							do {
+								const response = (await this.helpers.httpRequest({
+									method: 'GET',
+									url: 'https://api.central.sophos.com/partner/v1/admins',
+									headers: {
+										Authorization: `Bearer ${ctx.token}`,
+										'X-Partner-ID': ctx.partnerId as string,
+									},
+									qs: { page, pageSize, pageTotal: true },
+									json: true,
+								})) as IDataObject;
 
-					const qs: IDataObject = {};
-					if (billingFilters.tenantId) {
-						qs.tenantId = billingFilters.tenantId;
-					}
+								const items = (response.items as IDataObject[]) || [];
+								responseItems.push(...items);
 
-					const responseData = await this.helpers.httpRequest({
-						method: 'GET',
-						url: `https://api.central.sophos.com/partner/v1/billing/usage/${year}/${month}`,
-						headers: {
-							Authorization: `Bearer ${ctx.token}`,
-							'X-Partner-ID': ctx.partnerId as string,
-						},
-						qs,
-						json: true,
-					});
-					returnData.push({ json: responseData, pairedItem: { item: i } });
-				}
-
-				if (operation === 'getAllAdmins') {
-					const returnAll = this.getNodeParameter('returnAll', i) as boolean;
-					let responseItems: IDataObject[];
-
-					if (returnAll) {
-						responseItems = [];
-						let page = 1;
-						const pageSize = 100;
-						let totalPages = 1;
-
-						do {
+								const pages = response.pages as IDataObject | undefined;
+								totalPages = typeof pages?.total === 'number' ? (pages.total as number) : page;
+								page += 1;
+							} while (page <= totalPages);
+						} else {
+							const limit = this.getNodeParameter('limit', i) as number;
 							const response = (await this.helpers.httpRequest({
 								method: 'GET',
 								url: 'https://api.central.sophos.com/partner/v1/admins',
@@ -1228,48 +1284,48 @@ if (resource === 'organization') {
 									Authorization: `Bearer ${ctx.token}`,
 									'X-Partner-ID': ctx.partnerId as string,
 								},
-								qs: { page, pageSize, pageTotal: true },
+								qs: { page: 1, pageSize: limit, pageTotal: false },
 								json: true,
 							})) as IDataObject;
+							responseItems = (response.items as IDataObject[]) || [];
+						}
 
-							const items = (response.items as IDataObject[]) || [];
-							responseItems.push(...items);
-
-							const pages = response.pages as IDataObject | undefined;
-							totalPages = typeof pages?.total === 'number' ? (pages.total as number) : page;
-							page += 1;
-						} while (page <= totalPages);
-					} else {
-						const limit = this.getNodeParameter('limit', i) as number;
-						const response = (await this.helpers.httpRequest({
-							method: 'GET',
-							url: 'https://api.central.sophos.com/partner/v1/admins',
-							headers: {
-								Authorization: `Bearer ${ctx.token}`,
-								'X-Partner-ID': ctx.partnerId as string,
-							},
-							qs: { page: 1, pageSize: limit, pageTotal: false },
-							json: true,
-						})) as IDataObject;
-						responseItems = (response.items as IDataObject[]) || [];
+						for (const item of responseItems) {
+							returnData.push({ json: item, pairedItem: { item: i } });
+						}
 					}
 
-					for (const item of responseItems) {
-						returnData.push({ json: item, pairedItem: { item: i } });
-					}
-				}
+					if (operation === 'getAllRoles') {
+						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+						let responseItems: IDataObject[];
 
-				if (operation === 'getAllRoles') {
-					const returnAll = this.getNodeParameter('returnAll', i) as boolean;
-					let responseItems: IDataObject[];
+						if (returnAll) {
+							responseItems = [];
+							let page = 1;
+							const pageSize = 100;
+							let totalPages = 1;
 
-					if (returnAll) {
-						responseItems = [];
-						let page = 1;
-						const pageSize = 100;
-						let totalPages = 1;
+							do {
+								const response = (await this.helpers.httpRequest({
+									method: 'GET',
+									url: 'https://api.central.sophos.com/partner/v1/roles',
+									headers: {
+										Authorization: `Bearer ${ctx.token}`,
+										'X-Partner-ID': ctx.partnerId as string,
+									},
+									qs: { page, pageSize, pageTotal: true },
+									json: true,
+								})) as IDataObject;
 
-						do {
+								const items = (response.items as IDataObject[]) || [];
+								responseItems.push(...items);
+
+								const pages = response.pages as IDataObject | undefined;
+								totalPages = typeof pages?.total === 'number' ? (pages.total as number) : page;
+								page += 1;
+							} while (page <= totalPages);
+						} else {
+							const limit = this.getNodeParameter('limit', i) as number;
 							const response = (await this.helpers.httpRequest({
 								method: 'GET',
 								url: 'https://api.central.sophos.com/partner/v1/roles',
@@ -1277,132 +1333,116 @@ if (resource === 'organization') {
 									Authorization: `Bearer ${ctx.token}`,
 									'X-Partner-ID': ctx.partnerId as string,
 								},
-								qs: { page, pageSize, pageTotal: true },
+								qs: { page: 1, pageSize: limit, pageTotal: false },
 								json: true,
 							})) as IDataObject;
+							responseItems = (response.items as IDataObject[]) || [];
+						}
 
-							const items = (response.items as IDataObject[]) || [];
-							responseItems.push(...items);
+						for (const item of responseItems) {
+							returnData.push({ json: item, pairedItem: { item: i } });
+						}
+					}
 
-							const pages = response.pages as IDataObject | undefined;
-							totalPages = typeof pages?.total === 'number' ? (pages.total as number) : page;
-							page += 1;
-						} while (page <= totalPages);
-					} else {
-						const limit = this.getNodeParameter('limit', i) as number;
-						const response = (await this.helpers.httpRequest({
+					if (operation === 'getAdmin') {
+						const adminId = this.getNodeParameter('adminId', i) as string;
+						const responseData = await this.helpers.httpRequest({
 							method: 'GET',
-							url: 'https://api.central.sophos.com/partner/v1/roles',
+							url: `https://api.central.sophos.com/partner/v1/admins/${adminId}`,
 							headers: {
 								Authorization: `Bearer ${ctx.token}`,
 								'X-Partner-ID': ctx.partnerId as string,
 							},
-							qs: { page: 1, pageSize: limit, pageTotal: false },
 							json: true,
-						})) as IDataObject;
-						responseItems = (response.items as IDataObject[]) || [];
+						});
+						returnData.push({ json: responseData, pairedItem: { item: i } });
 					}
 
-						for (const item of responseItems) {
-						returnData.push({ json: item, pairedItem: { item: i } });
-					}
-				}
+					if (operation === 'createAdmin') {
+						const email = this.getNodeParameter('email', i) as string;
+						const firstName = this.getNodeParameter('firstName', i) as string;
+						const lastName = this.getNodeParameter('lastName', i) as string;
+						const roleId = this.getNodeParameter('roleId', i) as string;
+						const adminOptions = this.getNodeParameter('adminOptions', i, {}) as IDataObject;
 
-				if (operation === 'getAdmin') {
-					const adminId = this.getNodeParameter('adminId', i) as string;
-					const responseData = await this.helpers.httpRequest({
-						method: 'GET',
-						url: `https://api.central.sophos.com/partner/v1/admins/${adminId}`,
-						headers: {
-							Authorization: `Bearer ${ctx.token}`,
-							'X-Partner-ID': ctx.partnerId as string,
-						},
-						json: true,
-					});
-					returnData.push({ json: responseData, pairedItem: { item: i } });
-				}
-
-				if (operation === 'createAdmin') {
-					const email = this.getNodeParameter('email', i) as string;
-					const firstName = this.getNodeParameter('firstName', i) as string;
-					const lastName = this.getNodeParameter('lastName', i) as string;
-					const roleId = this.getNodeParameter('roleId', i) as string;
-					const adminOptions = this.getNodeParameter('adminOptions', i, {}) as IDataObject;
-
-					const roleAssignment: IDataObject = {
-						roleId,
-						target: { type: 'partner' },
-					};
-
-					// If tenant IDs specified, scope to those tenants
-					if (adminOptions.tenantIds) {
-						const tenantIds = (adminOptions.tenantIds as string).split(',').map(id => id.trim());
-						roleAssignment.target = {
-							type: 'tenants',
-							ids: tenantIds,
+						const roleAssignment: IDataObject = {
+							roleId,
+							target: { type: 'partner' },
 						};
+
+						// If tenant IDs specified, scope to those tenants
+						if (adminOptions.tenantIds) {
+							const tenantIds = (adminOptions.tenantIds as string)
+								.split(',')
+								.map((id) => id.trim());
+							roleAssignment.target = {
+								type: 'tenants',
+								ids: tenantIds,
+							};
+						}
+
+						const body: IDataObject = {
+							username: email,
+							profile: {
+								fullName: `${firstName} ${lastName}`,
+								firstName,
+								lastName,
+							},
+							roleAssignments: [roleAssignment],
+						};
+
+						const responseData = await this.helpers.httpRequest({
+							method: 'POST',
+							url: 'https://api.central.sophos.com/partner/v1/admins',
+							headers: {
+								Authorization: `Bearer ${ctx.token}`,
+								'X-Partner-ID': ctx.partnerId as string,
+								'Content-Type': 'application/json',
+							},
+							body,
+							json: true,
+						});
+						returnData.push({ json: responseData, pairedItem: { item: i } });
 					}
 
-					const body: IDataObject = {
-						username: email,
-						profile: {
-							fullName: `${firstName} ${lastName}`,
-							firstName,
-							lastName,
-						},
-						roleAssignments: [roleAssignment],
-					};
+					if (operation === 'getRoleAssignments') {
+						const adminId = this.getNodeParameter('adminId', i) as string;
+						const responseData = await this.helpers.httpRequest({
+							method: 'GET',
+							url: `https://api.central.sophos.com/partner/v1/admins/${adminId}/role-assignments`,
+							headers: {
+								Authorization: `Bearer ${ctx.token}`,
+								'X-Partner-ID': ctx.partnerId as string,
+							},
+							json: true,
+						});
 
-					const responseData = await this.helpers.httpRequest({
-						method: 'POST',
-						url: 'https://api.central.sophos.com/partner/v1/admins',
-						headers: {
-							Authorization: `Bearer ${ctx.token}`,
-							'X-Partner-ID': ctx.partnerId as string,
-							'Content-Type': 'application/json',
-						},
-						body,
-						json: true,
-					});
-					returnData.push({ json: responseData, pairedItem: { item: i } });
-				}
+						// Return items array if present
+						const items = ((responseData as IDataObject).items as IDataObject[]) || [responseData];
+						for (const item of items) {
+							returnData.push({ json: item, pairedItem: { item: i } });
+						}
+					}
 
-				if (operation === 'getRoleAssignments') {
-					const adminId = this.getNodeParameter('adminId', i) as string;
-					const responseData = await this.helpers.httpRequest({
-						method: 'GET',
-						url: `https://api.central.sophos.com/partner/v1/admins/${adminId}/role-assignments`,
-						headers: {
-							Authorization: `Bearer ${ctx.token}`,
-							'X-Partner-ID': ctx.partnerId as string,
-						},
-						json: true,
-					});
-					
-					// Return items array if present
-					const items = (responseData as IDataObject).items as IDataObject[] || [responseData];
-					for (const item of items) {
-						returnData.push({ json: item, pairedItem: { item: i } });
+					if (operation === 'deleteRoleAssignment') {
+						const adminId = this.getNodeParameter('adminId', i) as string;
+						const assignmentId = this.getNodeParameter('assignmentId', i) as string;
+
+						await this.helpers.httpRequest({
+							method: 'DELETE',
+							url: `https://api.central.sophos.com/partner/v1/admins/${adminId}/role-assignments/${assignmentId}`,
+							headers: {
+								Authorization: `Bearer ${ctx.token}`,
+								'X-Partner-ID': ctx.partnerId as string,
+							},
+							json: true,
+						});
+						returnData.push({
+							json: { success: true, deleted: assignmentId },
+							pairedItem: { item: i },
+						});
 					}
 				}
-
-				if (operation === 'deleteRoleAssignment') {
-					const adminId = this.getNodeParameter('adminId', i) as string;
-					const assignmentId = this.getNodeParameter('assignmentId', i) as string;
-					
-					await this.helpers.httpRequest({
-						method: 'DELETE',
-						url: `https://api.central.sophos.com/partner/v1/admins/${adminId}/role-assignments/${assignmentId}`,
-						headers: {
-							Authorization: `Bearer ${ctx.token}`,
-							'X-Partner-ID': ctx.partnerId as string,
-						},
-						json: true,
-					});
-					returnData.push({ json: { success: true, deleted: assignmentId }, pairedItem: { item: i } });
-				}
-			}
-
 			} catch (error) {
 				if (this.continueOnFail()) {
 					returnData.push({

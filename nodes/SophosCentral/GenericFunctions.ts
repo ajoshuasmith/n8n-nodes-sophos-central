@@ -15,6 +15,14 @@ import type { IAuthToken, ISophosCentralCredentials, ITenant } from './types';
 
 const tokenCache = new Map<string, IAuthToken>();
 
+// Cache tenant API hosts to avoid repeated lookups (10-minute TTL)
+interface ITenantHostCache {
+	apiHost: string;
+	expiresAt: number;
+}
+const tenantHostCache = new Map<string, ITenantHostCache>();
+const TENANT_HOST_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours (tenant regions are essentially permanent)
+
 function getCacheKey(credentials: ISophosCentralCredentials): string {
 	return `${credentials.clientId}:${credentials.clientSecret}`;
 }
@@ -208,6 +216,12 @@ export async function getTenantApiHost(
 	)) as unknown as ISophosCentralCredentials;
 
 	if (credentials.accountType === 'partner') {
+		// Check cache first to avoid excessive API calls
+		const cached = tenantHostCache.get(tenantId);
+		if (cached && cached.expiresAt > Date.now()) {
+			return cached.apiHost;
+		}
+
 		// Fetch the specific tenant to get its apiHost
 		const ctx = await getAuthContext.call(this, credentials);
 		
@@ -223,22 +237,33 @@ export async function getTenantApiHost(
 			})) as IDataObject;
 
 			// Get apiHost from response
-			const apiHost = response.apiHost || response['api-host'];
-			if (apiHost) {
-				return apiHost as string;
+			let apiHost = response.apiHost || response['api-host'];
+			
+			if (!apiHost) {
+				// Fallback: construct from dataRegion
+				const dataRegion = response.dataRegion || response['data-region'];
+				if (dataRegion) {
+					apiHost = `https://api-${dataRegion}.central.sophos.com`;
+				}
 			}
 
-			// Fallback: construct from dataRegion
-			const dataRegion = response.dataRegion || response['data-region'];
-			if (dataRegion) {
-				return `https://api-${dataRegion}.central.sophos.com`;
+			if (!apiHost) {
+				throw new NodeOperationError(
+					this.getNode(),
+					`Tenant '${tenantId}' found but no apiHost or dataRegion in response.`,
+				);
 			}
 
-			throw new NodeOperationError(
-				this.getNode(),
-				`Tenant '${tenantId}' found but no apiHost or dataRegion in response.`,
-			);
+			// Cache the API host
+			tenantHostCache.set(tenantId, {
+				apiHost: apiHost as string,
+				expiresAt: Date.now() + TENANT_HOST_CACHE_TTL,
+			});
+
+			return apiHost as string;
 		} catch (error) {
+			// Clear any stale cache entry on error
+			tenantHostCache.delete(tenantId);
 			throw new NodeOperationError(
 				this.getNode(),
 				`Could not find tenant '${tenantId}'. Ensure it exists and is accessible by this Partner account.`,
