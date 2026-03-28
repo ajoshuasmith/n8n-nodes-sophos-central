@@ -109,10 +109,41 @@ export const firmwareFields: INodeProperties[] = [
 		type: 'resourceLocator',
 		default: { mode: 'list', value: '' },
 		required: true,
-		description: 'Select from the list or provide the Firewall UUID (not Serial Number). The list displays names/serials for readability but uses UUIDs internally.',
+		description: 'The firewall to upgrade or cancel upgrade for',
 		displayOptions: {
 			show: {
 				resource: ['firmware'],
+				operation: ['upgrade', 'cancelUpgrade'],
+			},
+		},
+		modes: [
+			{
+				displayName: 'From List',
+				name: 'list',
+				type: 'list',
+				typeOptions: {
+					searchListMethod: 'firewallSearch',
+					searchable: true,
+				},
+			},
+			{
+				displayName: 'By ID',
+				name: 'id',
+				type: 'string',
+				placeholder: 'e.g. {{ $json.firewallId }}',
+			},
+		],
+	},
+	{
+		displayName: 'Firewall',
+		name: 'firewallId',
+		type: 'resourceLocator',
+		default: { mode: 'id', value: '' },
+		description: 'Leave empty to check ALL firewalls. Select a specific firewall to check only that one.',
+		displayOptions: {
+			show: {
+				resource: ['firmware'],
+				operation: ['getCurrent'],
 			},
 		},
 		modes: [
