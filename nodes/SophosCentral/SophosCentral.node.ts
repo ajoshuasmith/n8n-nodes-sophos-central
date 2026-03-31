@@ -1117,7 +1117,7 @@ export class SophosCentral implements INodeType {
 						do {
 							const response = (await this.helpers.httpRequest({
 								method: 'GET',
-								url: 'https://api.central.sophos.com/licenses/v1/firewalls',
+								url: 'https://api.central.sophos.com/licensing/v1/licenses/firewalls',
 								headers,
 								qs: { page, pageSize, pageTotal: true },
 								json: true,
@@ -1154,7 +1154,7 @@ export class SophosCentral implements INodeType {
 							do {
 								const response = (await this.helpers.httpRequest({
 									method: 'GET',
-									url: 'https://api.central.sophos.com/licenses/v1/firewalls',
+									url: 'https://api.central.sophos.com/licensing/v1/licenses/firewalls',
 									headers,
 									qs: { page, pageSize, pageTotal: true },
 									json: true,
@@ -1174,7 +1174,7 @@ export class SophosCentral implements INodeType {
 							const limit = this.getNodeParameter('limit', i) as number;
 							const response = (await this.helpers.httpRequest({
 								method: 'GET',
-								url: 'https://api.central.sophos.com/licenses/v1/firewalls',
+								url: 'https://api.central.sophos.com/licensing/v1/licenses/firewalls',
 								headers,
 								qs: { page: 1, pageSize: limit, pageTotal: false },
 								json: true,
@@ -1196,7 +1196,7 @@ export class SophosCentral implements INodeType {
 							do {
 								const response = (await this.helpers.httpRequest({
 									method: 'GET',
-									url: 'https://api.central.sophos.com/licenses/v1/licenses',
+									url: 'https://api.central.sophos.com/licensing/v1/licenses',
 									headers,
 									qs: { page, pageSize, pageTotal: true },
 									json: true,
@@ -1216,7 +1216,7 @@ export class SophosCentral implements INodeType {
 							const limit = this.getNodeParameter('limit', i) as number;
 							const response = (await this.helpers.httpRequest({
 								method: 'GET',
-								url: 'https://api.central.sophos.com/licenses/v1/licenses',
+								url: 'https://api.central.sophos.com/licensing/v1/licenses',
 								headers,
 								qs: { page: 1, pageSize: limit, pageTotal: false },
 								json: true,
