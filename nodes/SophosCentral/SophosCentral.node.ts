@@ -95,6 +95,11 @@ export class SophosCentral implements INodeType {
 						value: 'health',
 					},
 					{
+						name: 'Licensing',
+						value: 'licensing',
+						description: 'Firewall licensing and subscription information',
+					},
+					{
 						name: 'Organization',
 						value: 'organization',
 					},
@@ -408,14 +413,14 @@ export class SophosCentral implements INodeType {
 
 		for (let i = 0; i < items.length; i++) {
 			try {
-				// Organization and Partner resources don't use tenant context parameter
+				// Organization, Partner, and Licensing resources don't use tenant context parameter
 				const tenantIdRaw =
-					resource === 'organization' || resource === 'partner'
+					resource === 'organization' || resource === 'partner' || resource === 'licensing'
 						? undefined
 						: getResourceLocatorValue(this.getNodeParameter('tenantId', i) as unknown);
 
 				let tenantId: string | undefined;
-				if (resource !== 'organization' && resource !== 'partner') {
+				if (resource !== 'organization' && resource !== 'partner' && resource !== 'licensing') {
 					try {
 						tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
 					} catch (error) {
@@ -1079,6 +1084,148 @@ export class SophosCentral implements INodeType {
 								tenantId,
 							);
 							returnData.push({ json: responseData, pairedItem: { item: i } });
+						}
+					}
+				}
+
+				if (resource === 'licensing') {
+					const credentials = (await this.getCredentials(
+						'sophosCentralApi',
+					)) as unknown as ISophosCentralCredentials;
+					const ctx = await getAuthContext.call(this, credentials);
+
+					const headers: Record<string, string> = {
+						Authorization: `Bearer ${ctx.token}`,
+						Accept: 'application/json',
+					};
+
+					if (credentials.accountType === 'partner') {
+						headers['X-Partner-ID'] = ctx.partnerId as string;
+					} else if (credentials.tenantId) {
+						headers['X-Tenant-ID'] = credentials.tenantId;
+					}
+
+					const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+
+					if (operation === 'getFirewallLicense') {
+						const serialNumber = this.getNodeParameter('serialNumber', i) as string;
+						let found: IDataObject | undefined;
+						let page = 1;
+						const pageSize = 100;
+						let totalPages = 1;
+
+						do {
+							const response = (await this.helpers.httpRequest({
+								method: 'GET',
+								url: 'https://api.central.sophos.com/licenses/v1/firewalls',
+								headers,
+								qs: { page, pageSize, pageTotal: true },
+								json: true,
+							})) as IDataObject;
+
+							const items = (response.items as IDataObject[]) || [];
+							found = items.find(
+								(fw) => (fw.serialNumber as string) === serialNumber,
+							);
+							if (found) break;
+
+							const pages = response.pages as IDataObject | undefined;
+							totalPages =
+								typeof pages?.total === 'number' ? (pages.total as number) : page;
+							page += 1;
+						} while (page <= totalPages);
+
+						if (found) {
+							returnData.push({ json: found, pairedItem: { item: i } });
+						} else {
+							throw new NodeOperationError(
+								this.getNode(),
+								`No firewall found with serial number '${serialNumber}'`,
+							);
+						}
+					}
+
+					if (operation === 'getFirewallLicenses') {
+						if (returnAll) {
+							let page = 1;
+							const pageSize = 100;
+							let totalPages = 1;
+
+							do {
+								const response = (await this.helpers.httpRequest({
+									method: 'GET',
+									url: 'https://api.central.sophos.com/licenses/v1/firewalls',
+									headers,
+									qs: { page, pageSize, pageTotal: true },
+									json: true,
+								})) as IDataObject;
+
+								const items = (response.items as IDataObject[]) || [];
+								for (const item of items) {
+									returnData.push({ json: item, pairedItem: { item: i } });
+								}
+
+								const pages = response.pages as IDataObject | undefined;
+								totalPages =
+									typeof pages?.total === 'number' ? (pages.total as number) : page;
+								page += 1;
+							} while (page <= totalPages);
+						} else {
+							const limit = this.getNodeParameter('limit', i) as number;
+							const response = (await this.helpers.httpRequest({
+								method: 'GET',
+								url: 'https://api.central.sophos.com/licenses/v1/firewalls',
+								headers,
+								qs: { page: 1, pageSize: limit, pageTotal: false },
+								json: true,
+							})) as IDataObject;
+
+							const items = (response.items as IDataObject[]) || [];
+							for (const item of items) {
+								returnData.push({ json: item, pairedItem: { item: i } });
+							}
+						}
+					}
+
+					if (operation === 'getAllLicenses') {
+						if (returnAll) {
+							let page = 1;
+							const pageSize = 100;
+							let totalPages = 1;
+
+							do {
+								const response = (await this.helpers.httpRequest({
+									method: 'GET',
+									url: 'https://api.central.sophos.com/licenses/v1/licenses',
+									headers,
+									qs: { page, pageSize, pageTotal: true },
+									json: true,
+								})) as IDataObject;
+
+								const items = (response.items as IDataObject[]) || [];
+								for (const item of items) {
+									returnData.push({ json: item, pairedItem: { item: i } });
+								}
+
+								const pages = response.pages as IDataObject | undefined;
+								totalPages =
+									typeof pages?.total === 'number' ? (pages.total as number) : page;
+								page += 1;
+							} while (page <= totalPages);
+						} else {
+							const limit = this.getNodeParameter('limit', i) as number;
+							const response = (await this.helpers.httpRequest({
+								method: 'GET',
+								url: 'https://api.central.sophos.com/licenses/v1/licenses',
+								headers,
+								qs: { page: 1, pageSize: limit, pageTotal: false },
+								json: true,
+							})) as IDataObject;
+
+							const items = (response.items as IDataObject[]) || [];
+							for (const item of items) {
+								returnData.push({ json: item, pairedItem: { item: i } });
+							}
 						}
 					}
 				}

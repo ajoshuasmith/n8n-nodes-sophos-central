@@ -4,6 +4,7 @@ import { firewallFields, firewallOperations } from './FirewallDescription';
 import { firewallGroupFields, firewallGroupOperations } from './FirewallGroupDescription';
 import { firmwareFields, firmwareOperations } from './FirmwareDescription';
 import { healthFields, healthOperations } from './HealthDescription';
+import { licensingFields, licensingOperations } from './LicensingDescription';
 import { organizationFields, organizationOperations } from './OrganizationDescription';
 import { partnerFields, partnerOperations } from './PartnerDescription';
 
@@ -13,6 +14,7 @@ export const operationFields = [
 	...firewallGroupOperations,
 	...firmwareOperations,
 	...healthOperations,
+	...licensingOperations,
 	...organizationOperations,
 	...partnerOperations,
 ];
@@ -23,6 +25,7 @@ export const resourceFields = [
 	...firewallGroupFields,
 	...firmwareFields,
 	...healthFields,
+	...licensingFields,
 	...organizationFields,
 	...partnerFields,
 ];
