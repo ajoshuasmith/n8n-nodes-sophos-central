@@ -1,6 +1,6 @@
 {
 	"name": "@joshuanode/n8n-nodes-sophos-central",
-	"version": "0.5.8",
+	"version": "0.5.9",
 	"description": "n8n community node for Sophos Central (Firewall Management API)",
 	"license": "MIT",
 	"keywords": [
@@ -37,7 +37,7 @@
 		"node": ">=18.17.0"
 	},
 	"scripts": {
-		"build": "n8n-node build && cp nodes/SophosCentral/*.svg nodes/SophosCentral/*.png dist/nodes/SophosCentral/",
+		"build": "n8n-node build && cp nodes/SophosCentral/*.svg nodes/SophosCentral/*.png dist/nodes/SophosCentral/ && rm -f dist/tsconfig.tsbuildinfo",
 		"build:watch": "tsc --watch",
 		"dev": "n8n-node dev",
 		"lint": "n8n-node lint",
