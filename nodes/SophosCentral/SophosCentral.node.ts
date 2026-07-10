@@ -1128,8 +1128,6 @@ export class SophosCentral implements INodeType {
 						'sophosCentralApi',
 					)) as unknown as ISophosCentralCredentials;
 
-					const returnAll = this.getNodeParameter('returnAll', i) as boolean;
-
 					if (operation === 'getFirewallLicense') {
 						const serialNumber = this.getNodeParameter('serialNumber', i) as string;
 						let found: IDataObject | undefined;
@@ -1159,6 +1157,7 @@ export class SophosCentral implements INodeType {
 					}
 
 					if (operation === 'getFirewallLicenses') {
+						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
 						const tenantIds =
 							credentials.accountType === 'partner'
 								? (await getTenantList.call(this, credentials)).map((tenant) => tenant.id)
@@ -1196,6 +1195,7 @@ export class SophosCentral implements INodeType {
 					}
 
 					if (operation === 'getAllLicenses') {
+						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
 						const tenantIds =
 							credentials.accountType === 'partner'
 								? (await getTenantList.call(this, credentials)).map((tenant) => tenant.id)
