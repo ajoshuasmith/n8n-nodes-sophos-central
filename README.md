@@ -117,8 +117,9 @@ For managing a single account:
 
 | Operation | Description |
 | --- | --- |
-| **Get Firewall License(s)** | Retrieve firewall subscriptions across the Partner's managed tenants or a single organization |
-| **Get Many Licenses** | Retrieve tenant license records; Partner credentials are automatically expanded across tenants |
+| **Get Firewall License by Serial Number** | Retrieve a firewall subscription by serial number |
+| **Get Many Firewall Licenses** | Retrieve firewall subscriptions across managed tenants or a single organization |
+| **Get Many Tenant Licenses** | Retrieve tenant product licenses; Partner credentials are automatically expanded across tenants |
 
 ### Diagnostic
 
