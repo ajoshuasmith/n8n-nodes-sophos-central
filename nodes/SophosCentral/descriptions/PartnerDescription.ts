@@ -177,6 +177,7 @@ export const partnerFields: INodeProperties[] = [
 			},
 		},
 		options: [
+			{ name: 'Current Month', value: 7 },
 			{
 				displayName: 'Tenant IDs',
 				name: 'tenantIds',
@@ -231,7 +232,7 @@ export const partnerFields: INodeProperties[] = [
 			{ name: 'November', value: 11 },
 			{ name: 'December', value: 12 },
 		],
-		default: 1,
+		default: 7,
 		description: 'Month for billing report',
 	},
 	{

@@ -26,6 +26,7 @@ Community node for the **Sophos Central Firewall Management API** — built for 
 | **Health Checks**     | Retrieve connection and managing status                           |
 | **Partner APIs**      | Billing usage, admin management, roles (MSP only)                 |
 | **Tenant Management** | Create, get, list tenant organizations (MSP only)                 |
+| **Diagnostics**       | Confirm account scope, regions, tenant access, and licensing mode |
 
 ---
 
@@ -58,6 +59,8 @@ For managing multiple tenant accounts:
 | Tenant ID          | Leave empty                                                     |
 
 > **Tip**: Leave the **Tenant** field empty in operations to aggregate data from **all managed tenants**.
+>
+> **Licensing note**: Sophos currently rejects its documented partner-scoped firewall-licensing request. This node automatically uses tenant-scoped licensing calls for each managed tenant instead.
 
 ### Organization
 
@@ -110,6 +113,19 @@ For managing a single account:
 | -------------- | ----------------------------- |
 | **Get Health** | Retrieve status for firewalls |
 
+### Licensing
+
+| Operation | Description |
+| --- | --- |
+| **Get Firewall License(s)** | Retrieve firewall subscriptions across the Partner's managed tenants or a single organization |
+| **Get Many Licenses** | Retrieve tenant license records; Partner credentials are automatically expanded across tenants |
+
+### Diagnostic
+
+| Operation | Description |
+| --- | --- |
+| **Connection Check** | Returns Sophos identity type, Partner ID, tenant count, regions, and active licensing mode |
+
 ### Organization (Partner Only)
 
 | Operation    | Description                           |
@@ -125,7 +141,7 @@ For managing a single account:
 | **Create Admin**           | Create a new partner administrator       |
 | **Delete Role Assignment** | Remove a role assignment from an admin   |
 | **Get Admin**              | Get a specific partner administrator     |
-| **Get Billing Usage**      | Monthly usage report for billing         |
+| **Get Billing Usage**      | Monthly usage report; months with no Sophos report return an empty result |
 | **Get Many Admins**        | List all partner administrators          |
 | **Get Many Roles**         | List available roles and permission sets |
 | **Get Role Assignments**   | Get all role assignments for an admin    |
@@ -147,7 +163,8 @@ For managing a single account:
 ```
 
 - **Automatic Region Routing**: Caches tenant-to-region mapping
-- **Token Caching**: Caches OAuth tokens for 5 minutes
+- **Token Caching**: Reuses OAuth tokens until shortly before expiry
+- **Transient API Retries**: Retries rate-limit and server errors with exponential backoff
 
 ---
 

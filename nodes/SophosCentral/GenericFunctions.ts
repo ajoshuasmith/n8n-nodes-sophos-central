@@ -27,6 +27,24 @@ function getCacheKey(credentials: ISophosCentralCredentials): string {
 	return `${credentials.clientId}:${credentials.clientSecret}`;
 }
 
+async function sophosHttpRequestWithRetry(
+	this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions,
+	options: IHttpRequestOptions,
+): Promise<IDataObject> {
+	for (let attempt = 0; attempt < 3; attempt += 1) {
+		try {
+			return (await this.helpers.httpRequest(options)) as IDataObject;
+		} catch (error) {
+			const err = error as { statusCode?: number; response?: { status?: number; statusCode?: number; headers?: IDataObject } };
+			const status = err.statusCode || err.response?.status || err.response?.statusCode;
+			if ((status !== 429 && (!status || status < 500)) || attempt === 2) throw error;
+			const retryAfter = Number(err.response?.headers?.['retry-after']);
+			await sleep(Number.isFinite(retryAfter) ? retryAfter * 1000 : 1000 * 2 ** attempt);
+		}
+	}
+	throw new Error('Unreachable retry state');
+}
+
 function joinUrl(baseUrl: string, endpoint: string): string {
 	const normalizedBase =
 		baseUrl.startsWith('http://') || baseUrl.startsWith('https://')
@@ -208,13 +226,13 @@ export async function sophosCentralLicensingApiRequest(
 	}
 
 	try {
-		return (await this.helpers.httpRequest({
+		return await sophosHttpRequestWithRetry.call(this, {
 			method: 'GET',
 			url: `https://api.central.sophos.com/licenses/v1${endpoint}`,
 			headers,
 			qs: query,
 			json: true,
-		})) as IDataObject;
+		});
 	} catch (error) {
 		const err = error as {
 			statusCode?: number;
@@ -453,7 +471,7 @@ export async function sophosCentralApiRequest(
 	}
 
 	try {
-		return await this.helpers.httpRequest(options);
+		return await sophosHttpRequestWithRetry.call(this, options);
 	} catch (error: unknown) {
 		const errorResponse = (error || {}) as JsonObject;
 		const err = error as {
@@ -588,6 +606,7 @@ export async function getAllTenantsFirewalls(
 
 			// Add tenant info to each firewall
 			for (const firewall of tenantFirewalls) {
+				firewall.tenantId = tenant.id;
 				firewall.tenant = {
 					id: tenant.id,
 					name: tenant.name,

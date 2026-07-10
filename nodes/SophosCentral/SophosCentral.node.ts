@@ -81,6 +81,11 @@ export class SophosCentral implements INodeType {
 						value: 'alert',
 					},
 					{
+						name: 'Diagnostic',
+						value: 'diagnostic',
+						description: 'Validate account scope, tenant access, and API routing',
+					},
+					{
 						name: 'Firewall',
 						value: 'firewall',
 					},
@@ -115,6 +120,15 @@ export class SophosCentral implements INodeType {
 			},
 			...operationFields,
 			...resourceFields,
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				default: 'connectionCheck',
+				displayOptions: { show: { resource: ['diagnostics'] } },
+				options: [{ name: 'Connection Check', value: 'connectionCheck', action: 'Run connection diagnostics' }],
+			},
 		],
 	};
 
@@ -429,6 +443,14 @@ export class SophosCentral implements INodeType {
 						// Fallthrough: tenantId remains undefined for "All Tenants" mode (Partner)
 						// Individual operations will validate if they strictly require a tenantId
 					}
+				}
+
+				if (resource === 'diagnostic') {
+					const credentials = (await this.getCredentials('sophosCentralApi')) as unknown as ISophosCentralCredentials;
+					const ctx = await getAuthContext.call(this, credentials);
+					const tenants = credentials.accountType === 'partner' ? await getTenantList.call(this, credentials) : [];
+					const regions = [...new Set(tenants.map((tenant) => tenant.dataRegion))];
+					returnData.push({ json: { accountType: credentials.accountType, sophosIdType: ctx.idType, partnerId: ctx.partnerId, apiHost: ctx.dataRegion, tenantCount: tenants.length, regions, licensingMode: credentials.accountType === 'partner' ? 'tenant-scoped fallback' : 'tenant-scoped' }, pairedItem: { item: i } });
 				}
 
 				if (resource === 'firewall') {
@@ -1353,17 +1375,14 @@ export class SophosCentral implements INodeType {
 							qs.tenantId = billingFilters.tenantId;
 						}
 
-						const responseData = await this.helpers.httpRequest({
-							method: 'GET',
-							url: `https://api.central.sophos.com/partner/v1/billing/usage/${year}/${month}`,
-							headers: {
-								Authorization: `Bearer ${ctx.token}`,
-								'X-Partner-ID': ctx.partnerId as string,
-							},
-							qs,
-							json: true,
-						});
-						returnData.push({ json: responseData, pairedItem: { item: i } });
+						try {
+							const responseData = await this.helpers.httpRequest({ method: 'GET', url: `https://api.central.sophos.com/partner/v1/billing/usage/${year}/${month}`, headers: { Authorization: `Bearer ${ctx.token}`, 'X-Partner-ID': ctx.partnerId as string }, qs, json: true });
+							returnData.push({ json: responseData, pairedItem: { item: i } });
+						} catch (error) {
+							const status = (error as { statusCode?: number; response?: { status?: number } }).statusCode || (error as { response?: { status?: number } }).response?.status;
+							if (status !== 404) throw error;
+							returnData.push({ json: { items: [], empty: true, message: `Sophos has no billing data for ${year}-${String(month).padStart(2, '0')}` }, pairedItem: { item: i } });
+						}
 					}
 
 					if (operation === 'getAllAdmins') {
