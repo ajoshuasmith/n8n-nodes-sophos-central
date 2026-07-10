@@ -1050,14 +1050,22 @@ export class SophosCentral implements INodeType {
 						let responseItems: IDataObject[];
 
 						if (returnAll) {
-							responseItems = await sophosCentralApiRequestAllItems.call(
-								this,
-								'GET',
-								baseUrl,
-								{},
-								qs,
-								tenantId,
-							);
+							responseItems = [];
+							let pageFromKey: string | undefined;
+							do {
+								const response = await sophosCentralApiRequest.call(
+									this,
+									'GET',
+									baseUrl,
+									{},
+									{ ...qs, pageSize: 100, pageTotal: true, ...(pageFromKey ? { pageFromKey } : {}) },
+									tenantId,
+								);
+								responseItems.push(...(((response as IDataObject).items as IDataObject[]) || []));
+								pageFromKey = ((response as IDataObject).pages as IDataObject | undefined)?.nextKey as
+									| string
+									| undefined;
+							} while (pageFromKey);
 						} else {
 							const limit = this.getNodeParameter('limit', i) as number;
 							qs.page = 1;
@@ -1371,8 +1379,8 @@ export class SophosCentral implements INodeType {
 						const billingFilters = this.getNodeParameter('billingFilters', i, {}) as IDataObject;
 
 						const qs: IDataObject = {};
-						if (billingFilters.tenantId) {
-							qs.tenantId = billingFilters.tenantId;
+						if (billingFilters.accountId) {
+							qs.accountId = billingFilters.accountId;
 						}
 
 						try {
@@ -1504,30 +1512,24 @@ export class SophosCentral implements INodeType {
 						const roleId = this.getNodeParameter('roleId', i) as string;
 						const adminOptions = this.getNodeParameter('adminOptions', i, {}) as IDataObject;
 
-						const roleAssignment: IDataObject = {
-							roleId,
-							target: { type: 'partner' },
-						};
-
-						// If tenant IDs specified, scope to those tenants
-						if (adminOptions.tenantIds) {
-							const tenantIds = (adminOptions.tenantIds as string)
-								.split(',')
-								.map((id) => id.trim());
-							roleAssignment.target = {
-								type: 'tenants',
-								ids: tenantIds,
-							};
-						}
+						const tenantIds = adminOptions.tenantIds
+							? (adminOptions.tenantIds as string)
+									.split(',')
+									.map((id) => id.trim())
+									.filter(Boolean)
+							: [];
+						const roleAssignments: IDataObject[] = tenantIds.length
+							? tenantIds.map((id) => ({ roleId, scope: { type: 'tenant', id } }))
+							: [{ roleId, scope: { type: 'self' } }];
 
 						const body: IDataObject = {
 							username: email,
 							profile: {
-								fullName: `${firstName} ${lastName}`,
+								name: `${firstName} ${lastName}`,
 								firstName,
 								lastName,
 							},
-							roleAssignments: [roleAssignment],
+							roleAssignments,
 						};
 
 						const responseData = await this.helpers.httpRequest({

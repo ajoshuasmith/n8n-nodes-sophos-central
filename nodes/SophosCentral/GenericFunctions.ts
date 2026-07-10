@@ -581,6 +581,8 @@ export async function getAllTenantsFirewalls(
 	const allFirewalls: IDataObject[] = [];
 
 	for (const tenant of tenants) {
+		if (!returnAll && limit !== undefined && allFirewalls.length >= limit) break;
+
 		try {
 			let tenantFirewalls: IDataObject[];
 			if (returnAll) {
@@ -598,7 +600,7 @@ export async function getAllTenantsFirewalls(
 					'GET',
 					'/firewall/v1/firewalls',
 					{},
-					{ page: 1, pageSize: limit || 50, pageTotal: false },
+					{ page: 1, pageSize: Math.min(100, (limit || 50) - allFirewalls.length), pageTotal: false },
 					tenant.id,
 				);
 				tenantFirewalls = ((response as IDataObject).items as IDataObject[]) || [];
