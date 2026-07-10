@@ -1376,6 +1376,7 @@ export class SophosCentral implements INodeType {
 					if (operation === 'getBillingUsage') {
 						const year = this.getNodeParameter('year', i) as number;
 						const month = this.getNodeParameter('month', i) as number;
+						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
 						const billingFilters = this.getNodeParameter('billingFilters', i, {}) as IDataObject;
 
 						const qs: IDataObject = {};
@@ -1384,8 +1385,33 @@ export class SophosCentral implements INodeType {
 						}
 
 						try {
-							const responseData = await this.helpers.httpRequest({ method: 'GET', url: `https://api.central.sophos.com/partner/v1/billing/usage/${year}/${month}`, headers: { Authorization: `Bearer ${ctx.token}`, 'X-Partner-ID': ctx.partnerId as string }, qs, json: true });
-							returnData.push({ json: responseData, pairedItem: { item: i } });
+							const url = `https://api.central.sophos.com/partner/v1/billing/usage/${year}/${month}`;
+							const headers = { Authorization: `Bearer ${ctx.token}`, 'X-Partner-ID': ctx.partnerId as string };
+
+							if (returnAll) {
+								let pageFromKey: string | undefined;
+								do {
+									const responseData = (await this.helpers.httpRequest({
+										method: 'GET',
+										url,
+										headers,
+										qs: { ...qs, pageSize: 100, pageTotal: true, ...(pageFromKey ? { pageFromKey } : {}) },
+										json: true,
+									})) as IDataObject;
+									for (const item of (responseData.items as IDataObject[]) || []) {
+										returnData.push({ json: item, pairedItem: { item: i } });
+									}
+									pageFromKey = (responseData.pages as IDataObject | undefined)?.nextKey as string | undefined;
+								} while (pageFromKey);
+							} else {
+								const limit = this.getNodeParameter('limit', i) as number;
+								const responseData = (await this.helpers.httpRequest({
+									method: 'GET', url, headers, qs: { ...qs, pageSize: limit }, json: true,
+								})) as IDataObject;
+								for (const item of (responseData.items as IDataObject[]) || []) {
+									returnData.push({ json: item, pairedItem: { item: i } });
+								}
+							}
 						} catch (error) {
 							const status = (error as { statusCode?: number; response?: { status?: number } }).statusCode || (error as { response?: { status?: number } }).response?.status;
 							if (status !== 404) throw error;

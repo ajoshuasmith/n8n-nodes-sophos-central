@@ -266,7 +266,7 @@ export const partnerFields: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['partner'],
-				operation: ['getAllAdmins', 'getAllRoles'],
+				operation: ['getBillingUsage', 'getAllAdmins', 'getAllRoles'],
 			},
 		},
 		default: false,
@@ -279,7 +279,7 @@ export const partnerFields: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['partner'],
-				operation: ['getAllAdmins', 'getAllRoles'],
+				operation: ['getBillingUsage', 'getAllAdmins', 'getAllRoles'],
 				returnAll: [false],
 			},
 		},
