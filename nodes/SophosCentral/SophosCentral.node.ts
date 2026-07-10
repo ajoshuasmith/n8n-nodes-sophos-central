@@ -126,7 +126,7 @@ export class SophosCentral implements INodeType {
 				type: 'options',
 				noDataExpression: true,
 				default: 'connectionCheck',
-				displayOptions: { show: { resource: ['diagnostics'] } },
+				displayOptions: { show: { resource: ['diagnostic'] } },
 				options: [{ name: 'Connection Check', value: 'connectionCheck', action: 'Run connection diagnostics' }],
 			},
 		],
