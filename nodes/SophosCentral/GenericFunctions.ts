@@ -56,8 +56,16 @@ export async function getAuthContext(
 		token,
 		expiresAt: whoami.expiresAt,
 		partnerId: whoami.partnerId,
+		idType: whoami.idType,
 		dataRegion: whoami.dataRegion,
 	};
+
+	if (credentials.accountType === 'partner' && ctx.idType !== 'partner') {
+		throw new NodeOperationError(
+			this.getNode(),
+			`This credential is configured as Partner, but Sophos whoami returned '${ctx.idType || 'no idType'}'. Create or select Partner API credentials, then try again.`,
+		);
+	}
 
 	tokenCache.set(cacheKey, ctx);
 	return ctx;
@@ -130,6 +138,7 @@ export async function getWhoAmI(
 			token,
 			expiresAt: Date.now() + 3600 * 1000,
 			partnerId: (response as IDataObject).id as string,
+			idType: (response as IDataObject).idType as string | undefined,
 			dataRegion: dataRegion as string,
 		};
 	} catch (error) {
@@ -139,6 +148,128 @@ export async function getWhoAmI(
 			description: 'Could not retrieve whoami information from Sophos Central',
 		});
 	}
+}
+
+function getSophosErrorDescription(error: unknown): string {
+	const err = error as {
+		message?: string;
+		error?: {
+			message?: string;
+			error?: string;
+			error_description?: string;
+			correlationId?: string;
+			code?: string;
+		};
+		response?: {
+			data?: { message?: string; error?: string; correlationId?: string; code?: string };
+			body?: { message?: string; error?: string; correlationId?: string; code?: string };
+		};
+	};
+	const details = err.response?.data || err.response?.body || err.error;
+	const message = details?.message || details?.error || err.message || 'Unknown error';
+	const correlationId = details?.correlationId;
+	const code = details?.code;
+
+	return [
+		message,
+		code ? `Code: ${code}` : undefined,
+		correlationId ? `Correlation ID: ${correlationId}` : undefined,
+	]
+		.filter((value): value is string => Boolean(value))
+		.join(' | ');
+}
+
+export async function sophosCentralLicensingApiRequest(
+	this: IExecuteFunctions,
+	endpoint: string,
+	query: IDataObject = {},
+	tenantId?: string,
+): Promise<IDataObject> {
+	const credentials = (await this.getCredentials(
+		'sophosCentralApi',
+	)) as unknown as ISophosCentralCredentials;
+	const ctx = await getAuthContext.call(this, credentials);
+	const effectiveTenantId =
+		tenantId || (credentials.accountType === 'organization' ? credentials.tenantId : undefined);
+	const headers: Record<string, string> = {
+		Authorization: `Bearer ${ctx.token}`,
+		Accept: 'application/json',
+	};
+
+	if (effectiveTenantId) {
+		headers['X-Tenant-ID'] = effectiveTenantId;
+	} else if (credentials.accountType === 'partner' && ctx.partnerId) {
+		headers['X-Partner-ID'] = ctx.partnerId;
+	} else {
+		throw new NodeOperationError(
+			this.getNode(),
+			'A Tenant ID is required for this Licensing API request.',
+		);
+	}
+
+	try {
+		return (await this.helpers.httpRequest({
+			method: 'GET',
+			url: `https://api.central.sophos.com/licenses/v1${endpoint}`,
+			headers,
+			qs: query,
+			json: true,
+		})) as IDataObject;
+	} catch (error) {
+		const err = error as {
+			statusCode?: number;
+			response?: {
+				status?: number;
+				statusCode?: number;
+				data?: IDataObject;
+			};
+		};
+		const statusCode =
+			err.statusCode || err.response?.status || err.response?.statusCode || 'Unknown';
+		const scope = effectiveTenantId ? `tenant ${effectiveTenantId}` : `partner ${ctx.partnerId}`;
+		const description = `${getSophosErrorDescription(error)} | Request scope: ${scope}`;
+		const errorResponse = {
+			...(error as object),
+			response: {
+				...err.response,
+				data: {
+					...err.response?.data,
+					message: description,
+				},
+			},
+		} as JsonObject;
+
+		throw new NodeApiError(this.getNode(), errorResponse, {
+			message: `Sophos Licensing API error (Status ${statusCode})`,
+			description,
+		});
+	}
+}
+
+export async function sophosCentralLicensingApiRequestAllItems(
+	this: IExecuteFunctions,
+	endpoint: string,
+	tenantId?: string,
+): Promise<IDataObject[]> {
+	const items: IDataObject[] = [];
+	let page = 1;
+	let totalPages = 1;
+
+	do {
+		const response = await sophosCentralLicensingApiRequest.call(this, endpoint, {
+			page,
+			pageSize: 100,
+			pageTotal: true,
+		}, tenantId);
+		const pageItems = (response.items as IDataObject[]) || [];
+		items.push(...pageItems);
+
+		const pages = response.pages as IDataObject | undefined;
+		totalPages = typeof pages?.total === 'number' ? (pages.total as number) : page;
+		page += 1;
+	} while (page <= totalPages);
+
+	return items;
 }
 
 export async function getTenantList(
@@ -261,7 +392,7 @@ export async function getTenantApiHost(
 			});
 
 			return apiHost as string;
-		} catch (error) {
+		} catch {
 			// Clear any stale cache entry on error
 			tenantHostCache.delete(tenantId);
 			throw new NodeOperationError(

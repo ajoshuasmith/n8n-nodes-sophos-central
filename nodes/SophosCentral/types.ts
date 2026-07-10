@@ -11,6 +11,7 @@ export interface IAuthToken {
 	token: string;
 	expiresAt: number;
 	partnerId?: string;
+	idType?: string;
 	dataRegion: string;
 }
 

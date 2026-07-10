@@ -18,6 +18,8 @@ import {
 	sleep,
 	sophosCentralApiRequest,
 	sophosCentralApiRequestAllItems,
+	sophosCentralLicensingApiRequest,
+	sophosCentralLicensingApiRequestAllItems,
 } from './GenericFunctions';
 
 import { operationFields, resourceFields } from './descriptions';
@@ -205,8 +207,8 @@ export class SophosCentral implements INodeType {
 						{ page, pageSize: 100, pageTotal: true },
 						tenantId,
 					);
-				} catch (error) {
-					// If the API call fails (e.g., tenant doesn't have firewall access),
+					} catch {
+						// If the API call fails (e.g., tenant doesn't have firewall access),
 					// return empty results so user can still manually enter a firewall ID
 					return { results: [] };
 				}
@@ -423,7 +425,7 @@ export class SophosCentral implements INodeType {
 				if (resource !== 'organization' && resource !== 'partner' && resource !== 'licensing') {
 					try {
 						tenantId = await resolveTenantId.call(this, tenantIdRaw || undefined);
-					} catch (error) {
+					} catch {
 						// Fallthrough: tenantId remains undefined for "All Tenants" mode (Partner)
 						// Individual operations will validate if they strictly require a tenantId
 					}
@@ -548,6 +550,7 @@ export class SophosCentral implements INodeType {
 
 				if (resource === 'firmware') {
 					type FirmwareCheckFirewall = {
+						id?: string;
 						firmwareVersion?: string;
 						upgradeToVersion?: string[];
 					};
@@ -640,7 +643,7 @@ export class SophosCentral implements INodeType {
 										const results = (response as FirmwareUpgradeCheckResponse).firewalls || [];
 										for (const result of results) {
 											// Match result to original firewall to get name/hostname if needed
-											const original = firewallsToCheck.find((f) => f.id === (result as any).id); // API returns ID in result
+											const original = firewallsToCheck.find((f) => f.id === result.id); // API returns ID in result
 											const combined = {
 												...result,
 												tenantId: tid,
@@ -649,7 +652,7 @@ export class SophosCentral implements INodeType {
 											};
 											returnData.push({ json: combined as IDataObject, pairedItem: { item: i } });
 										}
-									} catch (e) {
+									} catch {
 										// Continue if one tenant fails
 										continue;
 									}
@@ -911,15 +914,25 @@ export class SophosCentral implements INodeType {
 						const groupId = getResourceLocatorValue(
 							this.getNodeParameter('firewallGroupId', i) as unknown,
 						);
-						const responseData = await sophosCentralApiRequest.call(
+						const groups = await sophosCentralApiRequestAllItems.call(
 							this,
 							'GET',
-							`/firewall/v1/firewall-groups/${groupId}`,
+							'/firewall/v1/firewall-groups',
 							{},
 							{},
 							tenantId,
 						);
-						returnData.push({ json: responseData, pairedItem: { item: i } });
+						const group = groups.find((item) => item.id === groupId);
+
+						if (!group) {
+							throw new NodeApiError(
+								this.getNode(),
+								{ message: 'Firewall group not found in tenant' },
+								{ httpCode: '404' },
+							);
+						}
+
+						returnData.push({ json: group, pairedItem: { item: i } });
 					}
 
 					if (operation === 'getAll') {
@@ -1092,48 +1105,26 @@ export class SophosCentral implements INodeType {
 					const credentials = (await this.getCredentials(
 						'sophosCentralApi',
 					)) as unknown as ISophosCentralCredentials;
-					const ctx = await getAuthContext.call(this, credentials);
-
-					const headers: Record<string, string> = {
-						Authorization: `Bearer ${ctx.token}`,
-						Accept: 'application/json',
-					};
-
-					if (credentials.accountType === 'partner') {
-						headers['X-Partner-ID'] = ctx.partnerId as string;
-					} else if (credentials.tenantId) {
-						headers['X-Tenant-ID'] = credentials.tenantId;
-					}
 
 					const returnAll = this.getNodeParameter('returnAll', i) as boolean;
 
 					if (operation === 'getFirewallLicense') {
 						const serialNumber = this.getNodeParameter('serialNumber', i) as string;
 						let found: IDataObject | undefined;
-						let page = 1;
-						const pageSize = 100;
-						let totalPages = 1;
+						const tenantIds =
+							credentials.accountType === 'partner'
+								? (await getTenantList.call(this, credentials)).map((tenant) => tenant.id)
+								: [undefined];
 
-						do {
-							const response = (await this.helpers.httpRequest({
-								method: 'GET',
-								url: 'https://api.central.sophos.com/licenses/v1/licenses/firewalls',
-								headers,
-								qs: { page, pageSize, pageTotal: true },
-								json: true,
-							})) as IDataObject;
-
-							const items = (response.items as IDataObject[]) || [];
-							found = items.find(
-								(fw) => (fw.serialNumber as string) === serialNumber,
+						for (const tenantId of tenantIds) {
+							const items = await sophosCentralLicensingApiRequestAllItems.call(
+								this,
+								'/licenses/firewalls',
+								tenantId,
 							);
+							found = items.find((fw) => (fw.serialNumber as string) === serialNumber);
 							if (found) break;
-
-							const pages = response.pages as IDataObject | undefined;
-							totalPages =
-								typeof pages?.total === 'number' ? (pages.total as number) : page;
-							page += 1;
-						} while (page <= totalPages);
+						}
 
 						if (found) {
 							returnData.push({ json: found, pairedItem: { item: i } });
@@ -1146,85 +1137,67 @@ export class SophosCentral implements INodeType {
 					}
 
 					if (operation === 'getFirewallLicenses') {
+						const tenantIds =
+							credentials.accountType === 'partner'
+								? (await getTenantList.call(this, credentials)).map((tenant) => tenant.id)
+								: [undefined];
+
 						if (returnAll) {
-							let page = 1;
-							const pageSize = 100;
-							let totalPages = 1;
-
-							do {
-								const response = (await this.helpers.httpRequest({
-									method: 'GET',
-									url: 'https://api.central.sophos.com/licenses/v1/licenses/firewalls',
-									headers,
-									qs: { page, pageSize, pageTotal: true },
-									json: true,
-								})) as IDataObject;
-
-								const items = (response.items as IDataObject[]) || [];
+							for (const tenantId of tenantIds) {
+								const items = await sophosCentralLicensingApiRequestAllItems.call(
+									this,
+									'/licenses/firewalls',
+									tenantId,
+								);
 								for (const item of items) {
 									returnData.push({ json: item, pairedItem: { item: i } });
 								}
-
-								const pages = response.pages as IDataObject | undefined;
-								totalPages =
-									typeof pages?.total === 'number' ? (pages.total as number) : page;
-								page += 1;
-							} while (page <= totalPages);
+							}
 						} else {
 							const limit = this.getNodeParameter('limit', i) as number;
-							const response = (await this.helpers.httpRequest({
-								method: 'GET',
-								url: 'https://api.central.sophos.com/licenses/v1/licenses/firewalls',
-								headers,
-								qs: { page: 1, pageSize: limit, pageTotal: false },
-								json: true,
-							})) as IDataObject;
-
-							const items = (response.items as IDataObject[]) || [];
-							for (const item of items) {
-								returnData.push({ json: item, pairedItem: { item: i } });
+							let returned = 0;
+							for (const tenantId of tenantIds) {
+								if (returned >= limit) break;
+								const response = await sophosCentralLicensingApiRequest.call(
+									this,
+									'/licenses/firewalls',
+									{ page: 1, pageSize: Math.min(100, limit - returned), pageTotal: false },
+									tenantId,
+								);
+								const items = (response.items as IDataObject[]) || [];
+								for (const item of items) {
+									returnData.push({ json: item, pairedItem: { item: i } });
+									returned += 1;
+								}
 							}
 						}
 					}
 
 					if (operation === 'getAllLicenses') {
-						if (returnAll) {
-							let page = 1;
-							const pageSize = 100;
-							let totalPages = 1;
+						const tenantIds =
+							credentials.accountType === 'partner'
+								? (await getTenantList.call(this, credentials)).map((tenant) => tenant.id)
+								: [credentials.tenantId];
+						const limit = returnAll ? undefined : (this.getNodeParameter('limit', i) as number);
+						let returned = 0;
 
-							do {
-								const response = (await this.helpers.httpRequest({
-									method: 'GET',
-									url: 'https://api.central.sophos.com/licenses/v1/licenses',
-									headers,
-									qs: { page, pageSize, pageTotal: true },
-									json: true,
-								})) as IDataObject;
+						for (const tenantId of tenantIds) {
+							if (!tenantId || (limit !== undefined && returned >= limit)) break;
+							const response = await sophosCentralLicensingApiRequest.call(
+								this,
+								'/licenses',
+								{},
+								tenantId,
+							);
+							const licenses = (response.licenses as IDataObject[]) || [];
 
-								const items = (response.items as IDataObject[]) || [];
-								for (const item of items) {
-									returnData.push({ json: item, pairedItem: { item: i } });
-								}
-
-								const pages = response.pages as IDataObject | undefined;
-								totalPages =
-									typeof pages?.total === 'number' ? (pages.total as number) : page;
-								page += 1;
-							} while (page <= totalPages);
-						} else {
-							const limit = this.getNodeParameter('limit', i) as number;
-							const response = (await this.helpers.httpRequest({
-								method: 'GET',
-								url: 'https://api.central.sophos.com/licenses/v1/licenses',
-								headers,
-								qs: { page: 1, pageSize: limit, pageTotal: false },
-								json: true,
-							})) as IDataObject;
-
-							const items = (response.items as IDataObject[]) || [];
-							for (const item of items) {
-								returnData.push({ json: item, pairedItem: { item: i } });
+							for (const license of licenses) {
+								if (limit !== undefined && returned >= limit) break;
+								returnData.push({
+									json: { ...license, tenant: response.tenant },
+									pairedItem: { item: i },
+								});
+								returned += 1;
 							}
 						}
 					}
@@ -1590,8 +1563,8 @@ export class SophosCentral implements INodeType {
 						});
 					}
 				}
-			} catch (error) {
-				if (this.continueOnFail()) {
+							} catch (error) {
+					if (this.continueOnFail()) {
 					returnData.push({
 						json: { error: (error as Error).message },
 						pairedItem: { item: i },

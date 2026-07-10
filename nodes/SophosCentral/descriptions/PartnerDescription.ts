@@ -71,7 +71,7 @@ export const partnerFields: INodeProperties[] = [
 				resource: ['partner'],
 			},
 		},
-		description: 'Partner operations require Partner API credentials configured in your Sophos Central credentials.',
+		description: 'Partner operations require Partner API credentials configured in your Sophos Central credentials',
 	},
 	// Admin ID field (for get, getRoleAssignments, deleteRoleAssignment)
 	{
@@ -182,7 +182,7 @@ export const partnerFields: INodeProperties[] = [
 				name: 'tenantIds',
 				type: 'string',
 				default: '',
-				placeholder: 'tenant-id-1,tenant-id-2',
+				placeholder: 'tenant-ID-1,tenant-ID-2',
 				description: 'Comma-separated list of tenant IDs for scoped access. Leave empty for all tenants.',
 			},
 		],
@@ -199,7 +199,7 @@ export const partnerFields: INodeProperties[] = [
 				operation: ['getBillingUsage'],
 			},
 		},
-		default: '={{ new Date().getFullYear() }}',
+		default: 2026,
 		description: 'Year for billing report (e.g., 2026)',
 		typeOptions: {
 			minValue: 2020,
